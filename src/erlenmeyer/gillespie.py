@@ -70,7 +70,7 @@ def _gillespie_kernel(y, r_m, p_m, r_v):
     # Cumulative rates, then pick a reaction weighted by propensity
     cum = np.cumsum(rates)
     r_i = _select_reaction(np.random.rand(), cum)
-    return dt, p_m[r_i] - r_m[r_i]
+    return dt, (p_m[r_i] - r_m[r_i]).astype(np.int64)
 
 
 class GillespieSimulator(AbstractSimulator):
@@ -90,7 +90,9 @@ class GillespieSimulator(AbstractSimulator):
         time; any further keyword arguments are ignored.
         """
         _seed_rng(seed)
-        y = np.array(initial, dtype=np.float64)
+        if not np.all(np.equal(np.mod(initial, 1), 0)):
+            raise ValueError("Initial populations must be integers")
+        y = np.array(initial, dtype=np.int64)
         t = 0.0
         times = [0.0]
         traj = [y.copy()]
