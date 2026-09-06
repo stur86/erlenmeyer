@@ -23,7 +23,7 @@ class TestOdeKernel:
         r_m = np.array([[1.0, 0.0]])
         p_m = np.array([[0.0, 1.0]])
         r_v = np.array([2.0])
-        dy = _ode_kernel(y, t, r_m, p_m, r_v)
+        dy = _ode_kernel(t, y, r_m, p_m, r_v)
         assert np.allclose(dy, [-6.0, 6.0])
 
     def test_return_shape_matches_species(self):
@@ -31,7 +31,7 @@ class TestOdeKernel:
         r_m = np.zeros((1, 3))
         p_m = np.zeros((1, 3))
         r_v = np.zeros(1)
-        dy = _ode_kernel(y, 0.0, r_m, p_m, r_v)
+        dy = _ode_kernel(0.0, y, r_m, p_m, r_v)
         assert dy.shape == (3,)
 
 
@@ -40,7 +40,7 @@ class TestOdeSimulatorMatchesAnalytic:
         k = 2.0
         t_end = 3.0
         sim = ODESimulator(_decay_system(k))
-        result = sim.run(np.array([5.0, 0.0]), t_end=t_end)
+        result = sim.run(np.array([5.0, 0.0]), t_end=t_end, rtol=1e-10, atol=1e-12)
         expected_a = 5.0 * np.exp(-k * t_end)
         assert np.isclose(result.values[-1, 0], expected_a)
         assert np.isclose(result.values[-1, 1], 5.0 - expected_a)
@@ -97,12 +97,12 @@ class TestOdeSimulatorTimeAxes:
 
 
 class TestOdeSimulatorForwardsKwargs:
-    def test_odeint_kwargs_are_forwarded(self):
+    def test_solver_kwargs_are_forwarded(self):
         sim = ODESimulator(_decay_system())
         result = sim.run(np.array([1.0, 0.0]), rtol=1e-10, atol=1e-12)
         assert isinstance(result, SimulationTrajectory)
 
-    def test_invalid_odeint_kwarg_raises(self):
+    def test_invalid_solver_kwarg_raises(self):
         sim = ODESimulator(_decay_system())
-        with pytest.raises(TypeError):
-            sim.run(np.array([1.0, 0.0]), not_a_real_option=123)
+        with pytest.raises(ValueError):
+            sim.run(np.array([1.0, 0.0]), method="NOT_A_REAL_METHOD")

@@ -33,7 +33,7 @@ def _(Reaction, ReactionSystem, Species):
 def _(ODESimulator, np, system):
     simulator = ODESimulator(system)
 
-    traj = simulator.run(np.array([1.0, 1.0, 0.0]), t_end=10.0)
+    traj = simulator.run(np.array([1.0, 1.0, 0.0]), t_end=10.0, steps=1000)
     return (traj,)
 
 
@@ -42,6 +42,33 @@ def _(plt, traj):
     _f, _a = plt.subplots()
 
     _a.plot(traj.times, traj.values)
+    return
+
+
+@app.cell
+def _(Reaction, ReactionSystem, Species):
+    S = Species('S')
+    I = Species('I')
+    R = Species('R')
+
+    sir_model = ReactionSystem([S, I, R])
+    sir_model.add_reaction(Reaction(S+I, 2*I, 20.0))
+    sir_model.add_reaction(Reaction(I, R, 10.0))
+    return (sir_model,)
+
+
+@app.cell
+def _(ODESimulator, np, sir_model):
+    sir_simulator = ODESimulator(sir_model)
+    sir_traj = sir_simulator.run(np.array([1.0, 0.1, 0.0]), t_end=1.0)
+    return (sir_traj,)
+
+
+@app.cell
+def _(plt, sir_traj):
+    _f, _a = plt.subplots()
+
+    _a.plot(sir_traj.times, sir_traj.values)
     return
 
 
