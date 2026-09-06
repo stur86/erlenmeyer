@@ -9,11 +9,21 @@ def _():
     import marimo as mo
     import numpy as np
     from erlenmeyer.ode import ODESimulator
+    from erlenmeyer.gillespie import GillespieSimulator, _gillespie_kernel
     from erlenmeyer.symbols import Species
     from erlenmeyer.reaction import Reaction, ReactionSystem
     import matplotlib.pyplot as plt
 
-    return ODESimulator, Reaction, ReactionSystem, Species, np, plt
+    print(_gillespie_kernel(np.array([1, 0]), np.array([[1.0, 0]]), np.array([[0, 1.0]]), np.array([1.0]), np.random.default_rng()))
+    return (
+        GillespieSimulator,
+        ODESimulator,
+        Reaction,
+        ReactionSystem,
+        Species,
+        np,
+        plt,
+    )
 
 
 @app.cell
@@ -69,6 +79,21 @@ def _(plt, sir_traj):
     _f, _a = plt.subplots()
 
     _a.plot(sir_traj.times, sir_traj.values)
+    return
+
+
+@app.cell
+def _(GillespieSimulator, np, sir_model):
+    sir_gill_simulator = GillespieSimulator(sir_model)
+    sir_gill_traj = sir_gill_simulator.run(np.array([100, 1, 0]), t_end=1.0)
+    return (sir_gill_traj,)
+
+
+@app.cell
+def _(plt, sir_gill_traj):
+    _f, _a = plt.subplots()
+
+    _a.plot(sir_gill_traj.times, sir_gill_traj.values)
     return
 
 
