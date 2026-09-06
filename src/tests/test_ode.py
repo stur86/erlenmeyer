@@ -35,6 +35,28 @@ class TestOdeKernel:
         assert dy.shape == (3,)
 
 
+class TestOdeKernelAbsentReactant:
+    def test_reaction_does_not_fire_when_reactant_is_absent(self):
+        # A + B -> C: with B at zero, the rate must be zero, not k*[A]
+        y = np.array([3.0, 0.0, 0.0])
+        r_m = np.array([[1.0, 1.0, 0.0]])
+        p_m = np.array([[0.0, 0.0, 1.0]])
+        r_v = np.array([2.0])
+        dy = _ode_kernel(0.0, y, r_m, p_m, r_v)
+        assert np.allclose(dy, 0.0, atol=1e-12)
+
+    def test_absent_reactant_stays_absent_in_simulation(self):
+        # SIR without infected: infection (S + I -> 2 I) must not ignite
+        s, i, r = Species("S"), Species("I"), Species("R")
+        sir = ReactionSystem([s, i, r])
+        sir.add_reaction(Reaction(s + i, 2 * i, 3e-4))
+        sir.add_reaction(Reaction(i, r, 0.1))
+        result = ODESimulator(sir).run(
+            np.array([990.0, 0.0, 0.0]), t_end=50.0, rtol=1e-8
+        )
+        assert result.values[-1, 1] == 0.0
+
+
 class TestOdeSimulatorMatchesAnalytic:
     def test_first_order_decay(self):
         k = 2.0

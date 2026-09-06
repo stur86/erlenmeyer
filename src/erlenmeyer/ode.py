@@ -7,7 +7,9 @@ from erlenmeyer.simulator import AbstractSimulator, SimulationTrajectory
 
 @numba.njit
 def safe_log_fast(y):
-    out = np.zeros_like(y, dtype=np.float64)
+    # Masked entries go to a large negative sentinel, so that a reaction
+    # whose reactant is absent has rate exp(-750) -> 0 instead of exp(0) -> 1
+    out = np.full_like(y, -750.0)
     # Numba will auto-vectorize this loop
     for i in np.ndindex(y.shape):
         if y[i] > 0:
