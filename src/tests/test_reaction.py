@@ -21,3 +21,5 @@ def test_reaction():
 
     with pytest.raises(dataclasses.FrozenInstanceError):
         r.rate = 2 # type: ignore
+
+    assert str(r) == "2H + O => H2O [1.0]"
