@@ -1,44 +1,99 @@
 import numba
 import numpy as np
 
-from erlenmeyer.ode import _individual_reaction_rates
 from erlenmeyer.simulator import AbstractSimulator, SimulationTrajectory
 
 _f64_eps = np.finfo(np.float64).eps
 
 
-#@numba.njit
-def _gillespie_kernel(y, r_m, p_m, r_v, rng: np.random.Generator):
-    # Rates for any reaction that doesn't have enough reagents go to zero
-    r_v_eff = np.array(r_v)
-    r_n = len(r_v)
-    for r_i in range(r_n):
-        if np.any(y - r_m[r_i] < 0):
-            r_v_eff[r_i] = 0.0
+@numba.njit
+def _seed_rng(seed):
+    """Seed the RNG used inside compiled kernels, if a seed is given."""
+    if seed is not None:
+        np.random.seed(seed)
 
-    rates = _individual_reaction_rates(y, r_m, p_m, r_v_eff)
+
+@numba.njit
+def _stochastic_propensity(y, r_m, r_v):
+    """Propensities for every reaction under the stochastic formulation.
+
+    The propensity of a reaction is ``k_i * prod_j n_j!/(n_j - r_ij)!``, i.e.
+    the product over its reagents of the falling factorial of the current
+    population. For a reactant present ``n`` times with stochiometric
+    coefficient ``a`` this is ``n*(n-1)*...*(n-a+1)``, which is the number of
+    distinct ways to pick the ``a`` colliding molecules. A reaction whose
+    reagents cannot be satisfied has propensity zero.
+    """
+    n_rxn, n_spec = r_m.shape
+    rates = np.zeros(n_rxn)
+    for i in range(n_rxn):
+        prop = r_v[i]
+        for j in range(n_spec):
+            n = int(r_m[i, j])
+            if n > 0:
+                if y[j] < n:
+                    prop = 0.0
+                    break
+                for k in range(n):
+                    prop *= y[j] - k
+        rates[i] = prop
+    return rates
+
+
+@numba.njit
+def _select_reaction(u, cum_rates):
+    """Pick a reaction index for a uniform ``u`` in [0, 1) over cum_rates."""
+    target = u * cum_rates[-1]
+    for i in range(len(cum_rates)):
+        if target < cum_rates[i]:
+            return i
+    return len(cum_rates) - 1
+
+
+@numba.njit
+def _gillespie_kernel(y, r_m, p_m, r_v):
+    """Perform one Gillespie step, returning ``(dt, dcounts)``.
+
+    ``y`` holds the current integer population of every species. The step
+    draws the time to the next reaction from an exponential distribution and
+    selects which reaction fires, weighted by its stochastic propensity.
+
+    If no reaction is possible, returns ``(0.0, zeros)`` so the caller can
+    stop.
+    """
+    rates = _stochastic_propensity(y, r_m, r_v)
     total_rate = np.sum(rates)
     if total_rate == 0:
-        # No more reactions possible
         return 0.0, np.zeros_like(y)
-    norm_rates = rates / total_rate
-    # What time?
-    dt = -np.log(rng.uniform(_f64_eps, 1.0)) / total_rate
-    # Which reaction happens?
-    r_i = rng.choice(len(rates), p=norm_rates)
+
+    dt = -np.log(np.random.uniform(_f64_eps, 1.0)) / total_rate
+    # Cumulative rates, then pick a reaction weighted by propensity
+    cum = np.cumsum(rates)
+    r_i = _select_reaction(np.random.rand(), cum)
     return dt, p_m[r_i] - r_m[r_i]
 
 
 class GillespieSimulator(AbstractSimulator):
+    """A simulator that samples trajectories with the Gillespie algorithm."""
 
     def _simulate(
-        self, initial: np.ndarray, t_end: float = 1.0, seed: int | None = None, **kwargs
+        self,
+        initial: np.ndarray,
+        t_end: float = 1.0,
+        seed: int | None = None,
+        **kwargs,
     ) -> SimulationTrajectory:
-        y = np.array(initial)
+        """Simulate the system stochastically from ``initial`` to ``t_end``.
+
+        The global numpy random number generator is seeded with ``seed`` (when
+        given) so that runs are reproducible. ``t_end`` bounds the simulated
+        time; any further keyword arguments are ignored.
+        """
+        _seed_rng(seed)
+        y = np.array(initial, dtype=np.float64)
         t = 0.0
         times = [0.0]
-        traj = [initial.copy()]
-        rng = np.random.default_rng(seed)
+        traj = [y.copy()]
         matrices = self._system.get_reaction_matrices()
         while t < t_end:
             dt, dy = _gillespie_kernel(
@@ -46,7 +101,6 @@ class GillespieSimulator(AbstractSimulator):
                 r_m=matrices.reagents_m,
                 p_m=matrices.products_m,
                 r_v=matrices.rates_v,
-                rng=rng,
             )
             if dt == 0:
                 # System's equilibrated
@@ -54,7 +108,7 @@ class GillespieSimulator(AbstractSimulator):
                 traj.append(y.copy())
                 break
             t += dt
-            y += dy.astype(np.int64)
+            y += dy
             times.append(t)
             traj.append(y.copy())
 
