@@ -6,6 +6,7 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -13,7 +14,17 @@ def _():
     from erlenmeyer.reaction import Reaction, ReactionSystem
     from erlenmeyer.symbols import Species
 
-    return ODESimulator, Reaction, ReactionSystem, Species, np, plt
+    return ODESimulator, Reaction, ReactionSystem, Species, mo, np, plt
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Basic example
+
+    This is a basic example of a chemical reaction, $\mathrm{2H+O \rightarrow H_2O}$. We simply set the two species as existing in monoatomic state to be able to show how their concentrations change, with a default transition rate of $1.0$.
+    """)
+    return
 
 
 @app.cell

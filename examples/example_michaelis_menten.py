@@ -37,7 +37,7 @@ def _(Reaction, ReactionSystem, Species):
 @app.cell
 def _(ODESimulator, mm, np):
     # Use little enzyme so the enzyme cycle is the slow, rate-limiting part.
-    traj = ODESimulator(mm).run(np.array([10.0, 0.01, 0.0, 0.0]), t_end=10.0, steps=2000)
+    traj = ODESimulator(mm).run(np.array([10.0, 0.01, 0.0, 0.0]), t_end=3.0, steps=2000)
     return (traj,)
 
 

@@ -6,6 +6,7 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -20,9 +21,37 @@ def _():
         Reaction,
         ReactionSystem,
         Species,
+        mo,
         np,
         plt,
     )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # SIR model
+
+    This is the Susceptible-Infected-Recovered (SIR) model of epidemic spread. It has three species:
+
+    * S, people still Susceptible to the infection
+    * I, people currently Infected, and
+    * R, people Recovered (and thus now immune) to the infection
+
+    Two reactions describe the dynamics:
+
+    * $S+I \rightarrow 2I$: a healthy individual gets infected by contagion
+    * $I \rightarrow R$: an infected individual recovers and gains immunity
+
+    In this model, the disease "burns through" the susceptible population until eventually everyone is immune.
+
+    In a later variation of the model we also add:
+
+    * $R \rightarrow S$: a recovered individual loses immunity over time and goes back to being susceptible
+
+    which produces a "damping waves" dynamic with subsequent epidemics before the equilibrium is reached.
+    """)
+    return
 
 
 @app.cell
@@ -100,11 +129,6 @@ def _(plt, traj_sirs):
     _a.set_ylabel("population")
     _a.set_title("SIRS (SIR + reinfection)")
     _a.legend(traj_sirs.species)
-    return
-
-
-@app.cell
-def _():
     return
 
 
