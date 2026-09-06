@@ -13,7 +13,7 @@ def _():
     from erlenmeyer.reaction import Reaction, ReactionSystem
     from erlenmeyer.symbols import Species
 
-    return (ODESimulator, Reaction, ReactionSystem, Species, np, plt)
+    return ODESimulator, Reaction, ReactionSystem, Species, np, plt
 
 
 @app.cell
@@ -33,7 +33,7 @@ def _(Reaction, ReactionSystem, Species):
 
 
 @app.cell
-def _(ODESimulator, np, lv):
+def _(ODESimulator, lv, np):
     traj = ODESimulator(lv).run(np.array([10.0, 10.0, 0.0]), t_end=40.0, steps=3000)
     return (traj,)
 
@@ -54,10 +54,15 @@ def _(plt, traj):
     # Phase portrait: predator population vs prey population. The closed
     # loop shows the two species chase each other periodically.
     _f, _a = plt.subplots()
-    _a.plot(traj.values[:, 0], traj.values[:, 1])
+    _a.plot(traj.values[:, 0], traj.values[:, 1], lw=0.5)
     _a.set_xlabel("prey X")
     _a.set_ylabel("predator Y")
     _a.set_title("Lotka-Volterra: phase portrait")
+    return
+
+
+@app.cell
+def _():
     return
 
 

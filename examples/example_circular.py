@@ -13,7 +13,7 @@ def _():
     from erlenmeyer.reaction import Reaction, ReactionSystem
     from erlenmeyer.symbols import Species
 
-    return (ODESimulator, Reaction, ReactionSystem, Species, np, plt)
+    return ODESimulator, Reaction, ReactionSystem, Species, np, plt
 
 
 @app.cell
@@ -33,7 +33,7 @@ def _(Reaction, ReactionSystem, Species):
 
 
 @app.cell
-def _(ODESimulator, np, cycle):
+def _(ODESimulator, cycle, np):
     traj = ODESimulator(cycle).run(np.array([100.0, 0.0, 0.0]), t_end=10.0, steps=1000)
     return (traj,)
 
@@ -50,7 +50,7 @@ def _(plt, traj):
 
 
 @app.cell
-def _(np, traj):
+def _(traj):
     # Sanity checks: mass is conserved, and the system actually moves.
     total = traj.values.sum(axis=1)
     return (total,)
@@ -63,6 +63,11 @@ def _(plt, total):
     _a.set_xlabel("time index")
     _a.set_ylabel("total population")
     _a.set_title("Total mass is conserved")
+    return
+
+
+@app.cell
+def _():
     return
 
 

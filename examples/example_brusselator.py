@@ -13,7 +13,7 @@ def _():
     from erlenmeyer.reaction import Reaction, ReactionSystem
     from erlenmeyer.symbols import Species
 
-    return (ODESimulator, Reaction, ReactionSystem, Species, np, plt)
+    return ODESimulator, Reaction, ReactionSystem, Species, np, plt
 
 
 @app.cell
@@ -42,7 +42,7 @@ def _(Reaction, ReactionSystem, Species):
 
 
 @app.cell
-def _(ODESimulator, np, br):
+def _(ODESimulator, br, np):
     traj = ODESimulator(br).run(
         np.array([1000.0, 10000.0, 1.0, 1.0, 0.0, 0.0]), t_end=60.0, steps=3000
     )
@@ -65,10 +65,15 @@ def _(plt, traj):
     # Phase portrait: after a transient, the trajectory settles onto a
     # stable closed loop (the limit cycle).
     _f, _a = plt.subplots()
-    _a.plot(traj.values[:, 2], traj.values[:, 3])
+    _a.plot(traj.values[:, 2], traj.values[:, 3], lw=0.5)
     _a.set_xlabel("X")
     _a.set_ylabel("Y")
     _a.set_title("Brusselator: limit cycle")
+    return
+
+
+@app.cell
+def _():
     return
 
 

@@ -13,7 +13,7 @@ def _():
     from erlenmeyer.reaction import Reaction, ReactionSystem
     from erlenmeyer.symbols import Species
 
-    return (ODESimulator, Reaction, ReactionSystem, Species, np, plt)
+    return ODESimulator, Reaction, ReactionSystem, Species, np, plt
 
 
 @app.cell
@@ -44,7 +44,7 @@ def _(ODESimulator, mm, np):
 @app.cell
 def _(plt, traj):
     _f, _a = plt.subplots()
-    _a.plot(traj.times, traj.values)
+    _a.semilogy(traj.times, traj.values)
     _a.set_xlabel("time")
     _a.set_ylabel("concentration")
     _a.set_title("Michaelis-Menten enzyme kinetics")
@@ -53,7 +53,7 @@ def _(plt, traj):
 
 
 @app.cell
-def _(mm, np, ODESimulator):
+def _(ODESimulator, mm, np):
     # Initial velocity as a function of substrate concentration. Even with
     # more and more substrate, the rate levels off: that is the signature
     # saturation behaviour described by the Michaelis-Menten equation
@@ -71,7 +71,7 @@ def _(mm, np, ODESimulator):
         _t = _traj.times[_start:_stop]
         _p = _traj.values[_start:_stop, 3]
         v0.append(np.polyfit(_t, _p, 1)[0])
-    return (km, s0, v0, vmax)
+    return km, s0, v0, vmax
 
 
 @app.cell
@@ -84,6 +84,11 @@ def _(km, np, plt, s0, v0, vmax):
     _a.set_ylabel("initial rate v0")
     _a.set_title("Michaelis-Menten saturation curve")
     _a.legend()
+    return
+
+
+@app.cell
+def _():
     return
 
 

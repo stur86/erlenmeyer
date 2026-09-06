@@ -13,7 +13,7 @@ def _():
     from erlenmeyer.reaction import Reaction, ReactionSystem
     from erlenmeyer.symbols import Species
 
-    return (ODESimulator, Reaction, ReactionSystem, Species, np, plt)
+    return ODESimulator, Reaction, ReactionSystem, Species, np, plt
 
 
 @app.cell
@@ -42,6 +42,11 @@ def _(plt, traj):
     _a.set_xlabel("time")
     _a.set_ylabel("concentration")
     _a.legend(traj.species)
+    return
+
+
+@app.cell
+def _():
     return
 
 

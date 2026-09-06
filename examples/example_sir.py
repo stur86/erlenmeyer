@@ -36,7 +36,7 @@ def _(Reaction, ReactionSystem, Species):
     sir = ReactionSystem([s, i, r])
     sir.add_reaction(Reaction(s + i, 2 * i, 3e-4))
     sir.add_reaction(Reaction(i, r, 0.1))
-    return (sir,)
+    return i, r, s, sir
 
 
 @app.cell
@@ -74,36 +74,37 @@ def _(gill_traj, plt):
 
 
 @app.cell
-def _(Reaction, ReactionSystem, Species):
+def _(Reaction, ReactionSystem, i, r, s):
     # Add reinfection R -> S. The epidemic now comes in waves that slowly
     # damp out as the population settles toward an endemic equilibrium.
-    s2 = Species("S")
-    i2 = Species("I")
-    r2 = Species("R")
-
-    sir_rec = ReactionSystem([s2, i2, r2])
-    sir_rec.add_reaction(Reaction(s2 + i2, 2 * i2, 3e-4))
-    sir_rec.add_reaction(Reaction(i2, r2, 0.1))
-    sir_rec.add_reaction(Reaction(r2, s2, 0.02))
-    return (sir_rec,)
+    sirs_rec = ReactionSystem([s, i, r])
+    sirs_rec.add_reaction(Reaction(s + i, 2 * i, 1e-3))
+    sirs_rec.add_reaction(Reaction(i, r, 0.18))
+    sirs_rec.add_reaction(Reaction(r, s, 0.008))
+    return (sirs_rec,)
 
 
 @app.cell
-def _(ODESimulator, np, sir_rec):
-    traj_waves = ODESimulator(sir_rec).run(
-        np.array([990.0, 10.0, 0.0]), t_end=3000.0, steps=5000
+def _(ODESimulator, np, sirs_rec):
+    traj_sirs = ODESimulator(sirs_rec).run(
+        np.array([990.0, 10.0, 0.0]), t_end=250.0, steps=5000
     )
-    return (traj_waves,)
+    return (traj_sirs,)
 
 
 @app.cell
-def _(plt, traj_waves):
+def _(plt, traj_sirs):
     _f, _a = plt.subplots()
-    _a.plot(traj_waves.times, traj_waves.values)
+    _a.plot(traj_sirs.times, traj_sirs.values)
     _a.set_xlabel("time")
     _a.set_ylabel("population")
-    _a.set_title("SIR with reinfection: epidemic waves")
-    _a.legend(traj_waves.species)
+    _a.set_title("SIRS (SIR + reinfection)")
+    _a.legend(traj_sirs.species)
+    return
+
+
+@app.cell
+def _():
     return
 
 
