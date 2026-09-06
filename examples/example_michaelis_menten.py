@@ -87,10 +87,5 @@ def _(km, np, plt, s0, v0, vmax):
     return
 
 
-@app.cell
-def _():
-    return
-
-
 if __name__ == "__main__":
     app.run()
