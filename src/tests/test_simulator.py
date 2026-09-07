@@ -54,6 +54,20 @@ class TestSimulationTrajectoryConstruction:
                 species=[h], times=np.array([0.0]), values=np.array([[1.0]]) # type: ignore
             )
 
+    def test_slice_produces_slice(self):
+        t = np.arange(10)
+        vals = np.zeros((10,2))
+        vals[:,0] = t
+        vals[:,1] = 2*t
+        traj = SimulationTrajectory(species=["H", "O"], times=t, values=vals)
+        idx = slice(2, 8, 2)
+        traj_slice = traj.slice(idx)
+        assert traj_slice.species == traj.species
+        assert list(traj_slice.times) == [2, 4, 6]
+        assert traj_slice.values.shape == (3, 2)
+        assert list(traj_slice.values[:,0]) == [2, 4, 6]
+        assert list(traj_slice.values[:,1]) == [4, 8, 12]
+
 
 class TestAbstractSimulator:
     def _make_system(self):

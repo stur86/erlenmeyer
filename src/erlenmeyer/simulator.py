@@ -27,6 +27,15 @@ class SimulationTrajectory:
         if not all(isinstance(s, str) for s in self.species):
             raise ValueError("Species must be strings")
 
+    def slice(self, idx: slice) -> "SimulationTrajectory":
+        return SimulationTrajectory(
+            species=self.species,
+            times=self.times[idx],
+            values=self.values[idx]
+        )
+
+    def __len__(self) -> int:
+        return self.times.shape[0]
 
 class AbstractSimulator(ABC):
     """A base class for solvers that evolve a :class:`ReactionSystem` in time."""
