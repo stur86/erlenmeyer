@@ -174,3 +174,63 @@ class TestRandomness:
         traj = _trajectory([[0.5, 0.5]])
         result = sample_trajectory(traj, 10)
         assert result.sum() == 10
+
+
+class TestTimes:
+    def test_shape_matches_number_of_times(self):
+        traj = _trajectory([[0.5, 0.5], [0.2, 0.8], [0.7, 0.3]])
+        times = np.array([0.0, 1.5, 2.0])
+        result = sample_trajectory(traj, 100, times=times, rng=0)
+        assert result.shape == (3, 2)
+
+    def test_counts_add_up_to_sample_size(self):
+        traj = _trajectory([[0.5, 0.5], [0.2, 0.8], [0.7, 0.3]])
+        times = np.array([0.0, 0.5, 1.0, 2.0])
+        result = sample_trajectory(traj, 50, times=times, rng=0)
+        assert result.sum(axis=1).tolist() == [50, 50, 50, 50]
+
+    def test_exact_trajectory_times(self):
+        traj = _trajectory([[0.5, 0.5], [0.2, 0.8], [0.7, 0.3]])
+        result = sample_trajectory(traj, 100, times=traj.times, rng=0)
+        assert result.shape == traj.values.shape
+
+    def test_between_times_uses_previous_value(self):
+        traj = _trajectory([[1.0, 0.0], [0.0, 1.0], [0.5, 0.5]])
+        # Time 0.5 should use value from t=0 (previous)
+        result = sample_trajectory(traj, 100, times=np.array([0.5]), rng=0)
+        assert result[0].tolist() == [100, 0]
+
+    def test_below_first_time_raises(self):
+        traj = _trajectory([[0.5, 0.5], [0.2, 0.8]])
+        with pytest.raises(ValueError, match="outside the trajectory's time range"):
+            sample_trajectory(traj, 100, times=np.array([-1.0]), rng=0)
+
+    def test_after_last_time_raises(self):
+        traj = _trajectory([[0.5, 0.5], [0.2, 0.8]])
+        with pytest.raises(ValueError, match="outside the trajectory's time range"):
+            sample_trajectory(traj, 100, times=np.array([5.0]), rng=0)
+
+    def test_any_out_of_range_time_raises(self):
+        traj = _trajectory([[0.5, 0.5], [0.2, 0.8], [0.7, 0.3]])
+        times = np.array([0.0, 3.0, 1.0])
+        with pytest.raises(ValueError, match="outside the trajectory's time range"):
+            sample_trajectory(traj, 100, times=times, rng=0)
+
+    def test_boundary_times_are_allowed(self):
+        traj = _trajectory([[0.5, 0.5], [0.2, 0.8], [0.7, 0.3]])
+        times = np.array([0.0, 2.0])
+        result = sample_trajectory(traj, 100, times=times, rng=0)
+        assert result.shape == (2, 2)
+
+    def test_without_replacement(self):
+        traj = _trajectory(np.array([[50, 50], [20, 80]]))
+        times = np.array([0.0, 1.0])
+        result = sample_trajectory(traj, 10, with_replacement=False, times=times, rng=0)
+        assert result.shape == (2, 2)
+        assert result.sum(axis=1).tolist() == [10, 10]
+
+    def test_single_time_point(self):
+        traj = _trajectory([[0.3, 0.7], [0.6, 0.4]])
+        result = sample_trajectory(traj, 100, times=np.array([1.0]), rng=0)
+        assert result.shape == (1, 2)
+        assert result.sum() == 100

@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.interpolate import interp1d
 
 from erlenmeyer.simulator import SimulationTrajectory
 
@@ -8,6 +9,7 @@ def sample_trajectory(
     sample_size: int,
     with_replacement: bool = True,
     rng: np.random.Generator | int | None = None,
+    times: np.ndarray | None = None
 ) -> np.ndarray:
     """Draw a finite sample of ``sample_size`` items at each point of a trajectory.
 
@@ -23,13 +25,26 @@ def sample_trajectory(
     distribution; the values must therefore be integers, and ``sample_size`` can
     not exceed the total population at any time point.
 
+    Sampling can be done on a user-defined time axis. Absent that, it will just
+    use the trajectory's own times.
+
     ``rng`` can be a :class:`numpy.random.Generator`, a seed, or ``None`` for
     unseeded randomness.
     """
-    values = traj.values
     generator = (
         rng if isinstance(rng, np.random.Generator) else np.random.default_rng(rng)
     )
+    if times is None:
+        values = traj.values
+    else:
+        # Extract times by interpolation with closest previous value
+        if np.any(times < traj.times[0]) or np.any(times > traj.times[-1]):
+            raise ValueError(
+                "Requested sampling times are outside the trajectory's time range "
+                f"[{traj.times[0]}, {traj.times[-1]}]"
+            )
+        values = interp1d(traj.times, traj.values, kind='previous', axis=0)(times)
+        values = values.astype(traj.values.dtype)
 
     if with_replacement:
         totals = np.sum(values, axis=1)
