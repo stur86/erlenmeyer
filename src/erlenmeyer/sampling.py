@@ -9,6 +9,28 @@ from erlenmeyer.simulator import SimulationTrajectory, SimulationType
 def _only_one_of(a: Any, b: Any) -> bool:
     return ((a is None)+(b is None)) == 1
 
+def _split_n_by_proportions(n: int, proportions: np.ndarray) -> np.ndarray:
+    proportions = np.asarray(proportions)
+    # Normalize proportions just in case they don't sum to 1.0
+    proportions = proportions / proportions.sum()
+
+    # 1. Calculate ideal float sizes and their floor integers
+    exact_counts = n * proportions
+    floor_counts = np.floor(exact_counts).astype(int)
+
+    # 2. Find out how many elements are missing due to floor rounding
+    remainder = n - floor_counts.sum()
+
+    # 3. Allocate remaining units to the bins with the largest fractional parts
+    fractional_parts = exact_counts - floor_counts
+    # Get indices sorted by largest fractional part descending
+    rank_indices = np.argsort(-fractional_parts)
+
+    # Add 1 to the top 'remainder' bins
+    floor_counts[rank_indices[:remainder]] += 1
+
+    return floor_counts
+
 def sample_trajectory(
     traj: SimulationTrajectory,
     sample_size: int | None = None,
@@ -116,11 +138,12 @@ def sample_trajectory(
         # as we interpret them as densities, particles/unit volume. It's ignored otherwise
         sample_counts = generator.binomial(np.floor(volume*totals).astype(np.int64), volume_fraction) # type: ignore
 
+    sample_traj = np.zeros(values.shape, dtype=np.int64)
+
     if with_replacement:
         # Time points with nothing in them have nothing to sample, and would
         # not be normalizable; they simply yield an all-zero count
         populated = totals > 0
-        sample_traj = np.zeros(values.shape, dtype=np.int64)
 
         # Sample with multinomial distribution, one draw per time point
         sample_traj[populated] = generator.multinomial(
@@ -132,8 +155,12 @@ def sample_trajectory(
                 "Can not do sampling without replacement on a floating point sample"
             )
 
-        sample_traj = np.array(
-            [generator.multivariate_hypergeometric(v, s_n) for (v, s_n) in zip(values, sample_counts)]
-        )
+        for i, (v, s_n) in enumerate(zip(values, sample_counts)):
+            # Proportions, if necessary
+            if volume != 1:
+                # We need to reassign counts
+                tot_v = np.sum(v)
+                v = _split_n_by_proportions(tot_v, (1.0*v)/tot_v)
+            sample_traj[i] = generator.multivariate_hypergeometric(v, s_n)
 
     return sample_traj

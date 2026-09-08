@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 import pytest
 
-from erlenmeyer.sampling import sample_trajectory
+from erlenmeyer.sampling import _only_one_of, _split_n_by_proportions, sample_trajectory
 from erlenmeyer.simulator import SimulationTrajectory, SimulationType
 
 
@@ -15,6 +15,23 @@ def _trajectory(values, species=("A", "B"), simulation_type=SimulationType.ODE):
         values=values,
         simulation_type=simulation_type,
     )
+
+
+class TestUtilityFunctions:
+    def test_only_one_of(self):
+        assert _only_one_of(1, None)
+        assert _only_one_of(None, 2.0)
+        assert not _only_one_of(None, None)
+        assert not _only_one_of(1, 2.0)
+
+    def test_split_by_prop(self):
+        proportions = np.array([0.7, 0.3])
+        assert np.all(_split_n_by_proportions(10, proportions) == [7, 3])
+        assert np.all(_split_n_by_proportions(11, proportions) == [8, 3])
+        for n in range(10, 30):
+            ans = _split_n_by_proportions(n, proportions)
+            assert np.sum(ans) == n
+            assert ans.shape == proportions.shape
 
 
 class TestSampleWithReplacement:
@@ -277,9 +294,7 @@ class TestVolume:
         traj = _trajectory([[100.0, 0.0]] * 2000)
         fraction = 0.2
         unit = sample_trajectory(traj, volume_fraction=fraction, rng=0)
-        doubled = sample_trajectory(
-            traj, volume_fraction=fraction, volume=2.0, rng=0
-        )
+        doubled = sample_trajectory(traj, volume_fraction=fraction, volume=2.0, rng=0)
         assert unit.sum() / 2000 == pytest.approx(fraction * 100.0, rel=0.05)
         assert doubled.sum() / 2000 == pytest.approx(fraction * 100.0 * 2.0, rel=0.05)
 
@@ -297,3 +312,13 @@ class TestVolume:
             traj, volume_fraction=0.05, with_replacement=False, rng=0
         )
         assert result.sum() / 1000 == pytest.approx(0.05 * 100.0, rel=0.15)
+
+    def test_volume_on_discrete_resamples_counts(self):
+        traj = _trajectory(
+            np.array([[40, 60]], dtype=np.int64),
+            simulation_type=SimulationType.GILLESPIE,
+        )
+        # This will lead to a sample number greater than the sum of the
+        # current bin values
+        result = sample_trajectory(traj, volume_fraction=0.1, volume=100)
+        assert result.sum() == pytest.approx(1000.0, rel=0.1)
