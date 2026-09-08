@@ -7,6 +7,7 @@ from erlenmeyer.reaction import ReactionSystem
 from erlenmeyer.simulator import (
     AbstractSimulator,
     SimulationTrajectory,
+    SimulationType,
 )
 from erlenmeyer.symbols import Species
 
@@ -14,11 +15,15 @@ from erlenmeyer.symbols import Species
 class TestSimulationTrajectoryConstruction:
     def test_valid_trajectory(self):
         t = SimulationTrajectory(
-            species=["H", "O"], times=np.array([0.0, 1.0]), values=np.array([[1.0, 0.0], [0.5, 0.5]])
+            species=["H", "O"],
+            times=np.array([0.0, 1.0]),
+            values=np.array([[1.0, 0.0], [0.5, 0.5]]),
+            simulation_type=SimulationType.ODE,
         )
         assert t.species == ["H", "O"]
         assert t.times.tolist() == [0.0, 1.0]
         assert t.values.shape == (2, 2)
+        assert t.simulation_type is SimulationType.ODE
 
     @pytest.mark.parametrize(
         "times",
@@ -27,22 +32,26 @@ class TestSimulationTrajectoryConstruction:
     def test_times_must_be_one_dimensional(self, times):
         with pytest.raises(ValueError):
             SimulationTrajectory(
-                species=["H"], times=times, values=np.zeros((times.shape[0], 1))
+                species=["H"], times=times, values=np.zeros((times.shape[0], 1)),
+                simulation_type=SimulationType.ODE,
             )
 
     def test_values_must_match_times_and_species(self):
         with pytest.raises(ValueError):
             SimulationTrajectory(
-                species=["H", "O"], times=np.array([0.0, 1.0]), values=np.zeros((2, 3))
+                species=["H", "O"], times=np.array([0.0, 1.0]), values=np.zeros((2, 3)),
+                simulation_type=SimulationType.ODE,
             )
         with pytest.raises(ValueError):
             SimulationTrajectory(
-                species=["H", "O"], times=np.array([0.0, 1.0]), values=np.zeros((5, 2))
+                species=["H", "O"], times=np.array([0.0, 1.0]), values=np.zeros((5, 2)),
+                simulation_type=SimulationType.ODE,
             )
 
     def test_frozen_instance(self):
         t = SimulationTrajectory(
-            species=["H"], times=np.array([0.0]), values=np.array([[1.0]])
+            species=["H"], times=np.array([0.0]), values=np.array([[1.0]]),
+            simulation_type=SimulationType.ODE,
         )
         with pytest.raises(dataclasses.FrozenInstanceError):
             t.species = ["O"]  # type: ignore
@@ -51,18 +60,37 @@ class TestSimulationTrajectoryConstruction:
         h = Species("H")
         with pytest.raises(ValueError):
             SimulationTrajectory(
-                species=[h], times=np.array([0.0]), values=np.array([[1.0]]) # type: ignore
+                species=[h], times=np.array([0.0]), values=np.array([[1.0]]),  # type: ignore
+                simulation_type=SimulationType.ODE,
             )
+
+    def test_gillespie_values_must_be_integers(self):
+        with pytest.raises(ValueError, match="integers"):
+            SimulationTrajectory(
+                species=["H"], times=np.array([0.0, 1.0]),
+                values=np.array([[1.5], [0.5]]),
+                simulation_type=SimulationType.GILLESPIE,
+            )
+
+    def test_ode_values_may_be_floats(self):
+        t = SimulationTrajectory(
+            species=["H"], times=np.array([0.0, 1.0]),
+            values=np.array([[1.5], [0.5]]),
+            simulation_type=SimulationType.ODE,
+        )
+        assert t.values.dtype == np.float64
 
     def test_slice_produces_slice(self):
         t = np.arange(10)
-        vals = np.zeros((10,2))
-        vals[:,0] = t
-        vals[:,1] = 2*t
-        traj = SimulationTrajectory(species=["H", "O"], times=t, values=vals)
+        vals = np.zeros((10, 2), dtype=np.int64)
+        vals[:, 0] = t
+        vals[:, 1] = 2 * t
+        traj = SimulationTrajectory(species=["H", "O"], times=t, values=vals,
+                                    simulation_type=SimulationType.GILLESPIE)
         idx = slice(2, 8, 2)
         traj_slice = traj.slice(idx)
         assert traj_slice.species == traj.species
+        assert traj_slice.simulation_type is traj.simulation_type
         assert list(traj_slice.times) == [2, 4, 6]
         assert traj_slice.values.shape == (3, 2)
         assert list(traj_slice.values[:,0]) == [2, 4, 6]
@@ -99,6 +127,7 @@ class TestAbstractSimulatorRun:
                     species=[s.species for s in self._system.species],
                     times=t,
                     values=values,
+                    simulation_type=SimulationType.ODE,
                 )
 
         system = ReactionSystem([Species("H"), Species("O")])
@@ -153,6 +182,7 @@ class TestAbstractSimulatorRun:
                     species=[s.species for s in self._system.species],
                     times=np.array([0.0]),
                     values=initial[None, :],
+                    simulation_type=SimulationType.ODE,
                 )
 
         sim = CapturingSimulator(ReactionSystem([Species("H")]))

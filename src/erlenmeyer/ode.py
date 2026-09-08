@@ -2,7 +2,7 @@ import numba
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from erlenmeyer.simulator import AbstractSimulator, SimulationTrajectory
+from erlenmeyer.simulator import AbstractSimulator, SimulationTrajectory, SimulationType
 
 
 @numba.njit
@@ -38,7 +38,11 @@ def _ode_kernel(t, y, r_m, p_m, r_v):
 
 
 class ODESimulator(AbstractSimulator):
-    """A simulator that integrates the mass-action kinetics with ``solve_ivp``."""
+    """A simulator that integrates the mass-action kinetics with ``solve_ivp``.
+
+    Each run produces a deterministic trajectory of continuous
+    concentrations, sampled on a linearly spaced time axis.
+    """
 
     def _simulate(
         self,
@@ -48,11 +52,26 @@ class ODESimulator(AbstractSimulator):
         steps: int = 100,
         **solver_kwargs,
     ) -> SimulationTrajectory:
-        """Integrate the system from ``initial`` over ``[t_start, t_end]``.
+        """Integrate the mass-action kinetics of the system over time.
 
-        The time axis uses ``steps`` linearly spaced points. Any further
-        keyword arguments are passed straight to
-        :func:`scipy.integrate.solve_ivp`.
+        Parameters
+        ----------
+        initial : numpy.ndarray
+            Initial concentrations, in species order.
+        t_start : float, default 0.0
+            Start of the time interval.
+        t_end : float, default 1.0
+            End of the time interval.
+        steps : int, default 100
+            Number of linearly spaced points on the time axis.
+        **solver_kwargs
+            Passed straight to :func:`scipy.integrate.solve_ivp`.
+
+        Returns
+        -------
+        SimulationTrajectory
+            A trajectory of type ``ODE``, with continuous concentrations on a
+            linearly spaced time axis.
         """
         matrices = self._system.get_reaction_matrices()
         t = np.linspace(t_start, t_end, steps)
@@ -68,4 +87,5 @@ class ODESimulator(AbstractSimulator):
             species=[s.species for s in self._system.species],
             times=t,
             values=sol.y.T,
+            simulation_type=SimulationType.ODE,
         )

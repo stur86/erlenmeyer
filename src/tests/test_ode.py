@@ -3,7 +3,7 @@ import pytest
 
 from erlenmeyer.ode import ODESimulator, _ode_kernel
 from erlenmeyer.reaction import Reaction, ReactionSystem
-from erlenmeyer.simulator import SimulationTrajectory
+from erlenmeyer.simulator import SimulationTrajectory, SimulationType
 from erlenmeyer.symbols import Species
 
 
@@ -95,6 +95,7 @@ class TestOdeSimulatorTrajectory:
         sim = ODESimulator(_decay_system())
         result = sim.run({"A": 1.0})
         assert isinstance(result, SimulationTrajectory)
+        assert result.simulation_type is SimulationType.ODE
 
 
 class TestOdeSimulatorTimeAxes:

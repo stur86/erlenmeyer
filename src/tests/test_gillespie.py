@@ -3,7 +3,7 @@ import pytest
 
 from erlenmeyer.gillespie import GillespieSimulator, _stochastic_propensity
 from erlenmeyer.reaction import Reaction, ReactionSystem
-from erlenmeyer.simulator import SimulationTrajectory
+from erlenmeyer.simulator import SimulationTrajectory, SimulationType
 from erlenmeyer.symbols import Species
 
 
@@ -68,6 +68,7 @@ class TestGillespieSimulatorTrajectory:
     def test_returns_a_simulation_trajectory(self):
         result = GillespieSimulator(_decay_system()).run({"A": 50}, t_end=1.0)
         assert isinstance(result, SimulationTrajectory)
+        assert result.simulation_type is SimulationType.GILLESPIE
 
     def test_species_names_are_strings(self):
         result = GillespieSimulator(_decay_system()).run({"A": 50}, t_end=1.0)

@@ -4,15 +4,16 @@ import numpy as np
 import pytest
 
 from erlenmeyer.sampling import sample_trajectory
-from erlenmeyer.simulator import SimulationTrajectory
+from erlenmeyer.simulator import SimulationTrajectory, SimulationType
 
 
-def _trajectory(values, species=("A", "B")):
+def _trajectory(values, species=("A", "B"), simulation_type=SimulationType.ODE):
     values = np.asarray(values)
     return SimulationTrajectory(
         species=list(species),
         times=np.arange(values.shape[0], dtype=float),
         values=values,
+        simulation_type=simulation_type,
     )
 
 
@@ -147,8 +148,8 @@ class TestRandomness:
             else np.array([[50, 50], [20, 80]])
         )
         traj = _trajectory(values)
-        first = sample_trajectory(traj, 10, with_replacement, rng=42)
-        second = sample_trajectory(traj, 10, with_replacement, rng=42)
+        first = sample_trajectory(traj, 10, with_replacement=with_replacement, rng=42)
+        second = sample_trajectory(traj, 10, with_replacement=with_replacement, rng=42)
         assert first.tolist() == second.tolist()
 
     def test_different_seeds_give_different_samples(self):
@@ -195,10 +196,20 @@ class TestTimes:
         assert result.shape == traj.values.shape
 
     def test_between_times_uses_previous_value(self):
-        traj = _trajectory([[1.0, 0.0], [0.0, 1.0], [0.5, 0.5]])
-        # Time 0.5 should use value from t=0 (previous)
+        traj = _trajectory(
+            np.array([[100, 0], [0, 100]]),
+            simulation_type=SimulationType.GILLESPIE,
+        )
+        # Time 0.5 should use the value from t=0 (previous)
         result = sample_trajectory(traj, 100, times=np.array([0.5]), rng=0)
         assert result[0].tolist() == [100, 0]
+
+    def test_ode_trajectory_interpolates_linearly(self):
+        traj = _trajectory(np.array([[100, 0], [0, 100]]))
+        # Time 0.5 is midway between the two states, so the sample must be
+        # split, not drawn from the whole population of a single species
+        result = sample_trajectory(traj, 100, times=np.array([0.5]), rng=0)
+        assert 40 <= result[0, 0] <= 60
 
     def test_below_first_time_raises(self):
         traj = _trajectory([[0.5, 0.5], [0.2, 0.8]])
@@ -234,3 +245,55 @@ class TestTimes:
         result = sample_trajectory(traj, 100, times=np.array([1.0]), rng=0)
         assert result.shape == (1, 2)
         assert result.sum() == 100
+
+
+class TestVolume:
+    @pytest.mark.parametrize("volume", [0.0, -1.0])
+    def test_volume_must_be_positive(self, volume):
+        traj = _trajectory([[1.0, 1.0]])
+        with pytest.raises(ValueError, match="positive"):
+            sample_trajectory(traj, 100, volume=volume)
+        with pytest.raises(ValueError, match="positive"):
+            sample_trajectory(traj, volume_fraction=0.1, volume=volume)
+
+    def test_volume_is_ignored_with_fixed_sample_size(self):
+        traj = _trajectory([[0.5, 0.5]] * 20)
+        plain = sample_trajectory(traj, 100, rng=0)
+        scaled = sample_trajectory(traj, 100, rng=0, volume=7.0)
+        assert plain.tolist() == scaled.tolist()
+
+    def test_volume_is_ignored_with_fixed_sample_size_without_replacement(self):
+        traj = _trajectory(
+            np.array([[50, 50]] * 20, dtype=np.int64),
+            simulation_type=SimulationType.GILLESPIE,
+        )
+        plain = sample_trajectory(traj, 10, with_replacement=False, rng=0)
+        scaled = sample_trajectory(traj, 10, with_replacement=False, rng=0, volume=3.0)
+        assert plain.tolist() == scaled.tolist()
+
+    def test_volume_scales_the_drawn_fraction(self):
+        # Values are particles per unit volume: doubling the volume doubles
+        # the number of particles the fraction applies to
+        traj = _trajectory([[100.0, 0.0]] * 2000)
+        fraction = 0.2
+        unit = sample_trajectory(traj, volume_fraction=fraction, rng=0)
+        doubled = sample_trajectory(
+            traj, volume_fraction=fraction, volume=2.0, rng=0
+        )
+        assert unit.sum() / 2000 == pytest.approx(fraction * 100.0, rel=0.05)
+        assert doubled.sum() / 2000 == pytest.approx(fraction * 100.0 * 2.0, rel=0.05)
+
+    def test_volume_does_not_change_the_proportions(self):
+        traj = _trajectory([[30.0, 70.0]] * 2000)
+        result = sample_trajectory(traj, volume_fraction=0.1, volume=2.0, rng=0)
+        assert result[:, 0].sum() / result.sum() == pytest.approx(0.3, rel=0.05)
+
+    def test_volume_scales_without_replacement(self):
+        traj = _trajectory(
+            np.array([[40, 60]] * 1000, dtype=np.int64),
+            simulation_type=SimulationType.GILLESPIE,
+        )
+        result = sample_trajectory(
+            traj, volume_fraction=0.05, with_replacement=False, rng=0
+        )
+        assert result.sum() / 1000 == pytest.approx(0.05 * 100.0, rel=0.15)

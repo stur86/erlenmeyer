@@ -1,39 +1,95 @@
+from typing import Any
+
 import numpy as np
 from scipy.interpolate import interp1d
 
-from erlenmeyer.simulator import SimulationTrajectory
+from erlenmeyer.simulator import SimulationTrajectory, SimulationType
 
+
+def _only_one_of(a: Any, b: Any) -> bool:
+    return ((a is None)+(b is None)) == 1
 
 def sample_trajectory(
     traj: SimulationTrajectory,
-    sample_size: int,
+    sample_size: int | None = None,
+    volume_fraction: float | None = None,
     with_replacement: bool = True,
     rng: np.random.Generator | int | None = None,
-    times: np.ndarray | None = None
+    times: np.ndarray | None = None,
+    volume: float = 1.0
 ) -> np.ndarray:
-    """Draw a finite sample of ``sample_size`` items at each point of a trajectory.
+    """Draw and count a finite sample at each point of a trajectory.
 
-    This emulates the effect of measuring only a small aliquot of the system
-    instead of its entirety, and returns the counts of each species found in
-    that aliquot, with shape [times, species].
+    This emulates measuring only a small aliquot of the system instead of its
+    entirety. For every time point it returns the counts of each species found
+    in the aliquot, with shape ``[times, species]``.
 
-    With replacement, each time point of ``traj.values`` is treated as a set of
-    probabilities and sampled from a multinomial distribution; the values are
-    normalized if necessary, and a time point that is empty of every species
-    yields an all-zero sample. Without replacement, they are treated as populations
-    of distinguishable items and sampled from a multivariate hypergeometric
-    distribution; the values must therefore be integers, and ``sample_size`` can
-    not exceed the total population at any time point.
+    With replacement, each time point of ``traj.values`` is treated as a set
+    of probabilities and sampled from a multinomial distribution; the values
+    are normalized if needed, and a time point empty of every species yields
+    an all-zero sample. Without replacement, the values are treated as a
+    population of distinguishable items and sampled from a multivariate
+    hypergeometric distribution; they must therefore be integers, and the
+    number drawn can not exceed the population at any time point.
 
-    Sampling can be done on a user-defined time axis. Absent that, it will just
-    use the trajectory's own times.
+    The values of the trajectory are taken to be particles per unit volume,
+    so the amount of particles present at a time point is ``volume`` times
+    the sum of its values. This only comes into play when sampling by
+    ``volume_fraction``: ``volume`` fixes how many particles the fraction
+    applies to.
 
-    ``rng`` can be a :class:`numpy.random.Generator`, a seed, or ``None`` for
-    unseeded randomness.
+    Sampling can be done on a user-defined time axis. Absent that, the
+    trajectory's own times are used.
+
+    Parameters
+    ----------
+    traj : SimulationTrajectory
+        The trajectory to sample.
+    sample_size : int, optional
+        Number of particles to draw at each time point. Mutually exclusive
+        with ``volume_fraction``.
+    volume_fraction : float, optional
+        Fraction of the particles present at each time point to draw. The
+        number drawn at a time point follows a binomial distribution with
+        ``volume`` times the total amount present there. Mutually exclusive
+        with ``sample_size``.
+    with_replacement : bool, default True
+        Whether to sample from a multinomial (with replacement) or from a
+        multivariate hypergeometric (without replacement) distribution.
+    rng : numpy.random.Generator or int or None, default None
+        A random number generator, or a seed for a fresh one. ``None`` uses
+        unseeded randomness.
+    times : numpy.ndarray, optional
+        Time points to sample at instead of the trajectory's own ones. They
+        must lie within the trajectory's time range. Gillespie trajectories
+        are interpolated with the previous value, ODE ones linearly.
+    volume : float, default 1.0
+        Volume of the system. The particles of a time point are ``volume``
+        times the sum of its values, which sets how many are available when
+        sampling by ``volume_fraction``. Ignored when ``sample_size`` is
+        given. Must be positive.
+
+    Returns
+    -------
+    numpy.ndarray
+        Integer counts of each species at every time point, with shape
+        ``[times, species]``.
+
+    Raises
+    ------
+    ValueError
+        If both or neither of ``sample_size`` and ``volume_fraction`` are
+        given, if ``volume`` is not positive, or if values are sampled
+        without replacement and are not integers.
     """
     generator = (
         rng if isinstance(rng, np.random.Generator) else np.random.default_rng(rng)
     )
+    if volume <= 0:
+        raise ValueError("Volume must be positive")
+    if not _only_one_of(sample_size, volume_fraction):
+        raise ValueError("One and only one between sample_size and volume_fraction must be used")
+
     if times is None:
         values = traj.values
     else:
@@ -43,26 +99,41 @@ def sample_trajectory(
                 "Requested sampling times are outside the trajectory's time range "
                 f"[{traj.times[0]}, {traj.times[-1]}]"
             )
-        values = interp1d(traj.times, traj.values, kind='previous', axis=0)(times)
+        # Interpolation type: previous for a Gillespie (stepwise constant)
+        # trajectory, linear otherwise
+        _kind = (
+            "previous" if traj.simulation_type is SimulationType.GILLESPIE else "linear"
+        )
+        values = interp1d(traj.times, traj.values, kind=_kind, axis=0)(times)
         values = values.astype(traj.values.dtype)
 
+    totals = np.sum(values, axis=1)
+    # Sample counts
+    if sample_size is not None:
+        sample_counts = np.full_like(totals, sample_size, dtype=np.int64)
+    else:
+        # Volume multiplies the totals if we're doing a volume fraction measurement,
+        # as we interpret them as densities, particles/unit volume. It's ignored otherwise
+        sample_counts = generator.binomial(np.floor(volume*totals).astype(np.int64), volume_fraction) # type: ignore
+
     if with_replacement:
-        totals = np.sum(values, axis=1)
         # Time points with nothing in them have nothing to sample, and would
         # not be normalizable; they simply yield an all-zero count
         populated = totals > 0
         sample_traj = np.zeros(values.shape, dtype=np.int64)
+
         # Sample with multinomial distribution, one draw per time point
         sample_traj[populated] = generator.multinomial(
-            sample_size, values[populated] / totals[populated][:, None]
+            sample_counts[populated], values[populated] / totals[populated][:, None]
         )
-        return sample_traj
+    else:
+        if not np.issubdtype(values.dtype, np.integer):
+            raise ValueError(
+                "Can not do sampling without replacement on a floating point sample"
+            )
 
-    if not np.issubdtype(values.dtype, np.integer):
-        raise ValueError(
-            "Can not do sampling without replacement on a floating point sample"
+        sample_traj = np.array(
+            [generator.multivariate_hypergeometric(v, s_n) for (v, s_n) in zip(values, sample_counts)]
         )
 
-    return np.array(
-        [generator.multivariate_hypergeometric(v, sample_size) for v in values]
-    )
+    return sample_traj

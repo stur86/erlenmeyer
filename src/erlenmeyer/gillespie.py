@@ -1,7 +1,7 @@
 import numba
 import numpy as np
 
-from erlenmeyer.simulator import AbstractSimulator, SimulationTrajectory
+from erlenmeyer.simulator import AbstractSimulator, SimulationTrajectory, SimulationType
 
 _f64_eps = np.finfo(np.float64).eps
 
@@ -74,7 +74,13 @@ def _gillespie_kernel(y, r_m, p_m, r_v):
 
 
 class GillespieSimulator(AbstractSimulator):
-    """A simulator that samples trajectories with the Gillespie algorithm."""
+    """A simulator that samples trajectories with the Gillespie algorithm.
+
+    Each run produces one stochastic trajectory, where the values are integer
+    molecule counts and the time points are the times of the individual
+    reaction events. They are therefore not evenly spaced and their number
+    changes from run to run.
+    """
 
     def _simulate(
         self,
@@ -83,11 +89,30 @@ class GillespieSimulator(AbstractSimulator):
         seed: int | None = None,
         **kwargs,
     ) -> SimulationTrajectory:
-        """Simulate the system stochastically from ``initial`` to ``t_end``.
+        """Simulate the system stochastically from ``initial`` up to ``t_end``.
 
-        The global numpy random number generator is seeded with ``seed`` (when
-        given) so that runs are reproducible. ``t_end`` bounds the simulated
-        time; any further keyword arguments are ignored.
+        Parameters
+        ----------
+        initial : numpy.ndarray
+            Initial integer populations, in species order.
+        t_end : float, default 1.0
+            Time limit of the simulation.
+        seed : int or None, default None
+            Seed for the global NumPy random number generator. When given,
+            runs are reproducible.
+        **kwargs
+            Ignored.
+
+        Returns
+        -------
+        SimulationTrajectory
+            A trajectory of type ``GILLESPIE``, with integer molecule counts
+            and the reaction event times.
+
+        Raises
+        ------
+        ValueError
+            If ``initial`` contains non-integer amounts.
         """
         _seed_rng(seed)
         if not np.all(np.equal(np.mod(initial, 1), 0)):
@@ -118,4 +143,5 @@ class GillespieSimulator(AbstractSimulator):
             species=[s.species for s in self._system.species],
             times=np.array(times),
             values=np.array(traj),
+            simulation_type=SimulationType.GILLESPIE,
         )
