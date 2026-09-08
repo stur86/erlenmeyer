@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from erlenmeyer.reaction import ReactionSystem
+from erlenmeyer.symbols import Species
 
 
 @dataclass(frozen=True)
@@ -45,18 +46,39 @@ class AbstractSimulator(ABC):
     def __init__(self, reaction_system: ReactionSystem) -> None:
         self._system = reaction_system
 
-    def run(self, initial: np.ndarray, **kwargs) -> SimulationTrajectory:
+    def run(
+        self, initial: dict[Species | str, float], **kwargs
+    ) -> SimulationTrajectory:
         """Simulate the system from the given initial concentrations.
 
-        ``initial`` must have one entry per species, and all entries must be
-        non-negative. Any extra keyword arguments are passed on to
+        ``initial`` maps species to their starting amount. A species may be
+        given either as a :class:`Species` or as its name, and any species of
+        the system left out of the dictionary starts at zero. All amounts must
+        be non-negative. Any extra keyword arguments are passed on to
         :meth:`_simulate`.
         """
-        if initial.shape != (len(self._system.species),):
-            raise ValueError("Initial concentrations must have shape [species]")
-        if np.any(initial < 0):
-            raise ValueError("Initial concentrations must be non-negative")
-        return self._simulate(initial=initial, **kwargs)
+        return self._simulate(initial=self._initial_vector(initial), **kwargs)
+
+    def _initial_vector(self, initial: dict[Species | str, float]) -> np.ndarray:
+        """Turn a dictionary of initial amounts into a vector in species order.
+
+        Species missing from the dictionary start at zero. Raises ValueError
+        for an unknown species, for one given twice under different keys, or
+        for a negative amount.
+        """
+        if not isinstance(initial, dict):
+            raise TypeError("Initial concentrations must be given as a dictionary")
+        vector = np.zeros(len(self._system.species))
+        seen: set[int] = set()
+        for species, amount in initial.items():
+            index = self._system.get_species_index(species)
+            if index in seen:
+                raise ValueError(f"Species {species} given twice")
+            seen.add(index)
+            if amount < 0:
+                raise ValueError("Initial concentrations must be non-negative")
+            vector[index] = amount
+        return vector
 
     @abstractmethod
     def _simulate(self, initial: np.ndarray, **kwargs) -> SimulationTrajectory:

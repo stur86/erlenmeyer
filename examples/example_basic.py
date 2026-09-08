@@ -8,13 +8,12 @@ app = marimo.App(width="medium")
 def _():
     import marimo as mo
     import matplotlib.pyplot as plt
-    import numpy as np
 
     from erlenmeyer.ode import ODESimulator
     from erlenmeyer.reaction import Reaction, ReactionSystem
     from erlenmeyer.symbols import Species
 
-    return ODESimulator, Reaction, ReactionSystem, Species, mo, np, plt
+    return ODESimulator, Reaction, ReactionSystem, Species, mo, plt
 
 
 @app.cell(hide_code=True)
@@ -40,9 +39,9 @@ def _(Reaction, ReactionSystem, Species):
 
 
 @app.cell
-def _(ODESimulator, np, system):
+def _(ODESimulator, system):
     simulator = ODESimulator(system)
-    traj = simulator.run(np.array([1.0, 1.0, 0.0]), t_end=10.0, steps=1000)
+    traj = simulator.run({"H": 1.0, "O": 1.0}, t_end=10.0, steps=1000)
     return (traj,)
 
 

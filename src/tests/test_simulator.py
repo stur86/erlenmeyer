@@ -106,28 +106,40 @@ class TestAbstractSimulatorRun:
 
     def test_run_returns_a_trajectory(self):
         sim = self._make_simulator()
-        result = sim.run(np.array([1.0, 2.0]))
+        result = sim.run({"H": 1.0, "O": 2.0})
         assert isinstance(result, SimulationTrajectory)
         assert result.species == ["H", "O"]
 
     def test_run_passes_initial_to_simulate(self):
-        class CapturingSimulator(AbstractSimulator):
-            def __init__(self, system):
-                super().__init__(system)
-                self.received = None
+        sim = self._make_simulator()
+        result = sim.run({"H": 1.0, "O": 2.0})
+        assert result.values[0].tolist() == [1.0, 2.0]
 
-            def _simulate(self, initial, **kwargs):
-                self.received = initial
-                return SimulationTrajectory(
-                    species=[s.species for s in self._system.species],
-                    times=np.array([0.0]),
-                    values=initial[None, :],
-                )
+    def test_initial_follows_system_species_order(self):
+        # The dictionary order must not matter: the system's order wins
+        sim = self._make_simulator()
+        result = sim.run({"O": 2.0, "H": 1.0})
+        assert result.values[0].tolist() == [1.0, 2.0]
 
-        sim = CapturingSimulator(ReactionSystem([Species("H")]))
-        initial = np.array([3.0])
-        sim.run(initial)
-        assert sim.received is initial
+    def test_species_objects_are_valid_keys(self):
+        sim = self._make_simulator()
+        result = sim.run({Species("H"): 1.0, Species("O"): 2.0})
+        assert result.values[0].tolist() == [1.0, 2.0]
+
+    def test_species_names_and_objects_can_be_mixed(self):
+        sim = self._make_simulator()
+        result = sim.run({Species("H"): 1.0, "O": 2.0})
+        assert result.values[0].tolist() == [1.0, 2.0]
+
+    def test_missing_species_start_at_zero(self):
+        sim = self._make_simulator()
+        result = sim.run({"O": 2.0})
+        assert result.values[0].tolist() == [0.0, 2.0]
+
+    def test_empty_initial_starts_everything_at_zero(self):
+        sim = self._make_simulator()
+        result = sim.run({})
+        assert result.values[0].tolist() == [0.0, 0.0]
 
     def test_run_forwards_kwargs(self):
         class CapturingSimulator(AbstractSimulator):
@@ -144,27 +156,30 @@ class TestAbstractSimulatorRun:
                 )
 
         sim = CapturingSimulator(ReactionSystem([Species("H")]))
-        sim.run(np.array([1.0]), dt=0.1, steps=100)
+        sim.run({"H": 1.0}, dt=0.1, steps=100)
         assert sim.received_kwargs == {"dt": 0.1, "steps": 100}
 
-    def test_initial_shape_must_match_species_count(self):
+    def test_unknown_species_raises(self):
         sim = self._make_simulator()
         with pytest.raises(ValueError):
-            sim.run(np.array([1.0, 2.0, 3.0]))
-        with pytest.raises(ValueError):
-            sim.run(np.array([1.0]))
+            sim.run({"H": 1.0, "Xe": 2.0})
 
-    def test_initial_shape_must_be_one_dimensional(self):
+    def test_same_species_given_twice_raises(self):
         sim = self._make_simulator()
         with pytest.raises(ValueError):
-            sim.run(np.zeros((2, 1)))
+            sim.run({Species("H"): 1.0, "H": 2.0})
+
+    def test_non_dictionary_initial_raises(self):
+        sim = self._make_simulator()
+        with pytest.raises(TypeError):
+            sim.run(np.array([1.0, 2.0]))  # type: ignore[arg-type]
 
     def test_negative_initial_raises(self):
         sim = self._make_simulator()
         with pytest.raises(ValueError):
-            sim.run(np.array([-1.0, 2.0]))
+            sim.run({"H": -1.0, "O": 2.0})
 
     def test_zero_initial_is_allowed(self):
         sim = self._make_simulator()
-        result = sim.run(np.array([0.0, 0.0]))
+        result = sim.run({"H": 0.0, "O": 0.0})
         assert isinstance(result, SimulationTrajectory)

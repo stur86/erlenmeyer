@@ -35,9 +35,9 @@ def _(Reaction, ReactionSystem, Species):
 
 
 @app.cell
-def _(ODESimulator, np, sample_trajectory, wrsys):
+def _(ODESimulator, sample_trajectory, wrsys):
     ode_sim = ODESimulator(wrsys)
-    ode_traj = ode_sim.run(np.array([0.5, 0.5, 0.0]), t_end=20.0)
+    ode_traj = ode_sim.run({"H2": 0.5, "O2": 0.5}, t_end=20.0)
     ode_traj_sample = sample_trajectory(ode_traj.slice(slice(0, None, 10)), 500)
     return ode_traj, ode_traj_sample
 

@@ -66,52 +66,52 @@ class TestStochasticPropensityShape:
 
 class TestGillespieSimulatorTrajectory:
     def test_returns_a_simulation_trajectory(self):
-        result = GillespieSimulator(_decay_system()).run(np.array([50, 0]), t_end=1.0)
+        result = GillespieSimulator(_decay_system()).run({"A": 50}, t_end=1.0)
         assert isinstance(result, SimulationTrajectory)
 
     def test_species_names_are_strings(self):
-        result = GillespieSimulator(_decay_system()).run(np.array([50, 0]), t_end=1.0)
+        result = GillespieSimulator(_decay_system()).run({"A": 50}, t_end=1.0)
         assert result.species == ["A", "B"]
         assert all(isinstance(s, str) for s in result.species)
 
     def test_starts_at_initial_populations(self):
-        result = GillespieSimulator(_decay_system()).run(np.array([50, 0]), t_end=1.0)
+        result = GillespieSimulator(_decay_system()).run({"A": 50}, t_end=1.0)
         assert result.values[0].tolist() == [50, 0]
 
     def test_populations_stay_non_negative(self):
-        result = GillespieSimulator(_decay_system()).run(np.array([50, 0]), t_end=5.0)
+        result = GillespieSimulator(_decay_system()).run({"A": 50}, t_end=5.0)
         assert np.all(result.values >= 0)
 
     def test_populations_are_integers(self):
-        result = GillespieSimulator(_decay_system()).run(np.array([50, 0]), t_end=5.0)
+        result = GillespieSimulator(_decay_system()).run({"A": 50}, t_end=5.0)
         assert result.values.dtype == np.int64
 
     def test_accepts_integer_valued_float_initial(self):
-        result = GillespieSimulator(_decay_system()).run(np.array([50.0, 0.0]), t_end=1.0)
+        result = GillespieSimulator(_decay_system()).run({"A": 50.0}, t_end=1.0)
         assert result.values[0].tolist() == [50, 0]
 
     def test_non_integer_initial_raises(self):
         with pytest.raises(ValueError):
-            GillespieSimulator(_decay_system()).run(np.array([50.5, 0.0]), t_end=1.0)
+            GillespieSimulator(_decay_system()).run({"A": 50.5}, t_end=1.0)
 
 
 class TestGillespieSimulatorPhysics:
     def test_decay_conserves_total_population(self):
         # A -> B: the total A + B is constant throughout
-        result = GillespieSimulator(_decay_system()).run(np.array([50, 0]), t_end=5.0)
+        result = GillespieSimulator(_decay_system()).run({"A": 50}, t_end=5.0)
         totals = result.values.sum(axis=1)
         assert np.all(totals == 50)
 
     def test_decay_drives_a_to_zero(self):
         result = GillespieSimulator(_decay_system(k=2.0)).run(
-            np.array([50, 0]), t_end=20.0
+            {"A": 50}, t_end=20.0
         )
         assert result.values[-1][0] == 0.0
         assert result.values[-1][1] == 50.0
 
     def test_equilibrated_system_stops(self):
         # No reactions possible once A is gone; time jumps to t_end
-        result = GillespieSimulator(_decay_system()).run(np.array([0, 50]), t_end=3.0)
+        result = GillespieSimulator(_decay_system()).run({"B": 50}, t_end=3.0)
         assert result.times[-1] == 3.0
         assert result.values[-1].tolist() == [0.0, 50.0]
 
@@ -119,16 +119,16 @@ class TestGillespieSimulatorPhysics:
 class TestGillespieSimulatorSeeding:
     def test_same_seed_is_reproducible(self):
         sys = _decay_system()
-        r1 = GillespieSimulator(sys).run(np.array([50, 0]), t_end=2.0, seed=7)
-        r2 = GillespieSimulator(sys).run(np.array([50, 0]), t_end=2.0, seed=7)
+        r1 = GillespieSimulator(sys).run({"A": 50}, t_end=2.0, seed=7)
+        r2 = GillespieSimulator(sys).run({"A": 50}, t_end=2.0, seed=7)
         assert np.array_equal(r1.values, r2.values)
 
     def test_different_seeds_differ(self):
         sys = _decay_system()
-        r1 = GillespieSimulator(sys).run(np.array([50, 0]), t_end=2.0, seed=7)
-        r2 = GillespieSimulator(sys).run(np.array([50, 0]), t_end=2.0, seed=8)
+        r1 = GillespieSimulator(sys).run({"A": 50}, t_end=2.0, seed=7)
+        r2 = GillespieSimulator(sys).run({"A": 50}, t_end=2.0, seed=8)
         assert not np.array_equal(r1.values, r2.values)
 
     def test_accepts_no_seed(self):
-        result = GillespieSimulator(_decay_system()).run(np.array([50, 0]), t_end=1.0)
+        result = GillespieSimulator(_decay_system()).run({"A": 50}, t_end=1.0)
         assert isinstance(result, SimulationTrajectory)

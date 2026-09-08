@@ -35,9 +35,9 @@ def _(Reaction, ReactionSystem, Species):
 
 
 @app.cell
-def _(ODESimulator, mm, np):
+def _(ODESimulator, mm):
     # Use little enzyme so the enzyme cycle is the slow, rate-limiting part.
-    traj = ODESimulator(mm).run(np.array([10.0, 0.01, 0.0, 0.0]), t_end=3.0, steps=2000)
+    traj = ODESimulator(mm).run({"S": 10.0, "E": 0.01}, t_end=3.0, steps=2000)
     return (traj,)
 
 
@@ -64,7 +64,7 @@ def _(ODESimulator, mm, np):
     v0 = []
     for s_val in s0:
         _traj = ODESimulator(mm).run(
-            np.array([s_val, 0.01, 0.0, 0.0]), t_end=10.0, steps=2000
+            {"S": s_val, "E": 0.01}, t_end=10.0, steps=2000
         )
         # Skip the pre-steady-state burst, then take the slope of P(t)
         _start, _stop = int(3 * 2000 / 10), int(8 * 2000 / 10)

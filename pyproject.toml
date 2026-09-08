@@ -1,8 +1,10 @@
 [project]
 name = "erlenmeyer"
 version = "0.1.0"
-description = "Add your description here"
+description = "Build chemical reaction networks and simulate them with ODE or Gillespie solvers"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Simone Sturniolo", email = "simonesturniolo@gmail.com" }
 ]

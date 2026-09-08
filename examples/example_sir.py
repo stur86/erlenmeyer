@@ -8,7 +8,6 @@ app = marimo.App(width="medium")
 def _():
     import marimo as mo
     import matplotlib.pyplot as plt
-    import numpy as np
 
     from erlenmeyer.gillespie import GillespieSimulator
     from erlenmeyer.ode import ODESimulator
@@ -22,7 +21,6 @@ def _():
         ReactionSystem,
         Species,
         mo,
-        np,
         plt,
     )
 
@@ -69,8 +67,8 @@ def _(Reaction, ReactionSystem, Species):
 
 
 @app.cell
-def _(ODESimulator, np, sir):
-    traj = ODESimulator(sir).run(np.array([990.0, 10.0, 0.0]), t_end=150.0)
+def _(ODESimulator, sir):
+    traj = ODESimulator(sir).run({"S": 990.0, "I": 10.0}, t_end=150.0)
     return (traj,)
 
 
@@ -86,8 +84,8 @@ def _(plt, traj):
 
 
 @app.cell
-def _(GillespieSimulator, np, sir):
-    gill_traj = GillespieSimulator(sir).run(np.array([990, 10, 0]), t_end=150.0, seed=1)
+def _(GillespieSimulator, sir):
+    gill_traj = GillespieSimulator(sir).run({"S": 990, "I": 10}, t_end=150.0, seed=1)
     return (gill_traj,)
 
 
@@ -114,9 +112,9 @@ def _(Reaction, ReactionSystem, i, r, s):
 
 
 @app.cell
-def _(ODESimulator, np, sirs_rec):
+def _(ODESimulator, sirs_rec):
     traj_sirs = ODESimulator(sirs_rec).run(
-        np.array([990.0, 10.0, 0.0]), t_end=250.0, steps=5000
+        {"S": 990.0, "I": 10.0}, t_end=250.0, steps=5000
     )
     return (traj_sirs,)
 
