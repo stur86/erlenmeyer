@@ -86,6 +86,7 @@ class GillespieSimulator(AbstractSimulator):
         self,
         initial: np.ndarray,
         t_end: float = 1.0,
+        max_steps: int | None = None,
         seed: int | None = None,
         **kwargs,
     ) -> SimulationTrajectory:
@@ -97,6 +98,10 @@ class GillespieSimulator(AbstractSimulator):
             Initial integer populations, in species order.
         t_end : float, default 1.0
             Time limit of the simulation.
+        max_steps: int or None, default None
+            Maximum number of steps after which to cut even if t_end
+            wasn't reached. Used as a safety net because exponential
+            growth could cause some simulations to spiral off forever.
         seed : int or None, default None
             Seed for the global NumPy random number generator. When given,
             runs are reproducible.
@@ -122,7 +127,15 @@ class GillespieSimulator(AbstractSimulator):
         times = [0.0]
         traj = [y.copy()]
         matrices = self._system.get_reaction_matrices()
-        while t < t_end:
+        steps = 1
+        def _max_check() -> bool:
+            if max_steps is None:
+                return True
+            else:
+                return steps < max_steps
+
+        while t < t_end and _max_check():
+            steps += 1
             dt, dy = _gillespie_kernel(
                 y,
                 r_m=matrices.reagents_m,

@@ -133,3 +133,13 @@ class TestGillespieSimulatorSeeding:
     def test_accepts_no_seed(self):
         result = GillespieSimulator(_decay_system()).run({"A": 50}, t_end=1.0)
         assert isinstance(result, SimulationTrajectory)
+
+class TestGillespieSimulatorMaxSteps:
+    def test_max_steps_stops(self):
+        sys = _decay_system()
+        r1 = GillespieSimulator(sys).run({"A": 50}, t_end=2.0, seed=7)
+        r2 = GillespieSimulator(sys).run({"A": 50}, t_end=2.0, seed=7, max_steps=10)
+
+        assert len(r2) < len(r1)
+        assert len(r2) == 10
+        assert np.all(r2.values == r1.values[:10])
