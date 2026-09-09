@@ -19,7 +19,7 @@ def _split_n_by_proportions(n: int, proportions: np.ndarray) -> np.ndarray:
     floor_counts = np.floor(exact_counts).astype(int)
 
     # 2. Find out how many elements are missing due to floor rounding
-    remainder = n - floor_counts.sum()
+    remainder = int(n - floor_counts.sum())
 
     # 3. Allocate remaining units to the bins with the largest fractional parts
     fractional_parts = exact_counts - floor_counts
@@ -157,9 +157,9 @@ def sample_trajectory(
 
         for i, (v, s_n) in enumerate(zip(values, sample_counts)):
             # Proportions, if necessary
-            if volume != 1:
+            if volume != 1 and volume_fraction is not None:
                 # We need to reassign counts
-                tot_v = np.sum(v)
+                tot_v = volume*np.sum(v)
                 v = _split_n_by_proportions(tot_v, (1.0*v)/tot_v)
             sample_traj[i] = generator.multivariate_hypergeometric(v, s_n)
 

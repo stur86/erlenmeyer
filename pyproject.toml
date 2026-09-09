@@ -1,6 +1,6 @@
 [project]
 name = "erlenmeyer"
-version = "0.2.1"
+version = "0.2.2"
 description = "Build chemical reaction networks and simulate them with ODE or Gillespie solvers"
 readme = "README.md"
 license = "MIT"
