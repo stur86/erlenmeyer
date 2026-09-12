@@ -33,6 +33,26 @@ class TestReactionConstruction:
         assert r.products == o
         assert r.rate == 2.5
 
+    def test_decay_has_no_products(self):
+        # A decay consumes its reagents and puts nothing in their place
+        h = Species("H")
+        r = Reaction(2 * h, None, 1.5)
+
+        assert r.reagents.stochiometry() == [("H", 2)]
+        assert r.products is None
+        assert r.rate == 1.5
+        assert not r.bidirectional
+
+    def test_decay_can_be_declared_not_bidirectional(self):
+        h = Species("H")
+        r = Reaction(h, None, 1.0, bidirectional=False)
+        assert r.products is None
+
+    def test_bidirectional_decay_raises(self):
+        h = Species("H")
+        with pytest.raises(ValueError):
+            Reaction(h, None, 1.0, bidirectional=True)
+
 
 class TestReactionRepr:
     def test_default_arrow_is_forward(self):
@@ -46,6 +66,11 @@ class TestReactionRepr:
     def test_repr_matches_str(self):
         h, o = Species("H"), Species("O")
         assert repr(Reaction(h, o, 1.0)) == str(Reaction(h, o, 1.0))
+
+    def test_decay_products_are_a_star(self):
+        h = Species("H")
+        assert str(Reaction(h, None, 1.0)) == "H => * [1.0]"
+        assert str(Reaction(2 * h, None, 0.5)) == "2H => * [0.5]"
 
 
 class TestReactionEquality:
@@ -61,6 +86,25 @@ class TestReactionEquality:
         h, o = Species("H"), Species("O")
         assert Reaction(h, o, 1.0) != Reaction(h, o, 1.0, bidirectional=True)
 
+    def test_decays_with_same_fields_are_equal(self):
+        h = Species("H")
+        assert Reaction(h, None, 1.0) == Reaction(h, None, 1.0)
+
+    def test_decay_differs_from_a_reaction_with_products(self):
+        h, o = Species("H"), Species("O")
+        assert Reaction(h, None, 1.0) != Reaction(h, o, 1.0)
+        assert Reaction(h, o, 1.0) != Reaction(h, None, 1.0)
+
+    def test_a_decay_can_be_looked_up_in_a_list_of_reactions(self):
+        # Membership compares against every element, decay or not
+        h, o = Species("H"), Species("O")
+        decay = Reaction(h, None, 1.0)
+        system = ReactionSystem([h, o])
+        system.add_reaction(Reaction(h, o, 1.0))
+        system.add_reaction(decay)
+        assert decay in system.reactions
+        assert Reaction(o, None, 1.0) not in system.reactions
+
 
 class TestReactionHashing:
     def test_equal_reactions_hash_equal(self):
@@ -71,6 +115,17 @@ class TestReactionHashing:
         h, o = Species("H"), Species("O")
         reactions = {Reaction(h, o, 1.0), Reaction(h, o, 1.0), Reaction(h, o, 2.0)}
         assert len(reactions) == 2
+
+    def test_equal_decays_hash_equal(self):
+        h = Species("H")
+        assert hash(Reaction(h, None, 1.0)) == hash(Reaction(h, None, 1.0))
+
+    def test_duplicate_decay_is_rejected_by_a_system(self):
+        h = Species("H")
+        system = ReactionSystem([h])
+        system.add_reaction(Reaction(h, None, 1.0))
+        with pytest.raises(ValueError):
+            system.add_reaction(Reaction(h, None, 1.0))
 
 
 class TestReactionSystemConstruction:
@@ -203,3 +258,53 @@ class TestReactionSystemMatrices:
             tuple(forward_row_reagents),
             tuple(reverse_row_reagents),
         }
+
+
+class TestReactionSystemMatricesWithDecay:
+    def test_decay_gives_an_all_zero_products_row(self):
+        h, o = Species("H"), Species("O")
+        system = ReactionSystem([h, o])
+        system.add_reaction(Reaction(2 * h, None, 3.0))
+        matrices = system.get_reaction_matrices()
+        assert matrices.reagents_m.tolist() == [[2.0, 0.0]]
+        assert matrices.products_m.tolist() == [[0.0, 0.0]]
+        assert matrices.rates_v.tolist() == [3.0]
+
+    def test_decay_of_several_species_at_once(self):
+        h, o = Species("H"), Species("O")
+        system = ReactionSystem([h, o])
+        system.add_reaction(Reaction(h + 2 * o, None, 1.0))
+        matrices = system.get_reaction_matrices()
+        assert matrices.reagents_m.tolist() == [[1.0, 2.0]]
+        assert matrices.products_m.tolist() == [[0.0, 0.0]]
+
+    def test_decay_contributes_a_single_row(self):
+        h, o = Species("H"), Species("O")
+        system = ReactionSystem([h, o])
+        system.add_reaction(Reaction(h, None, 1.0))
+        matrices = system.get_reaction_matrices()
+        assert matrices.reagents_m.shape == (1, 2)
+        assert matrices.products_m.shape == (1, 2)
+        assert matrices.rates_v.shape == (1,)
+
+    def test_decay_alongside_a_normal_reaction(self):
+        h, o, h2o = Species("H"), Species("O"), Species("H2O")
+        system = ReactionSystem([h, o, h2o])
+        system.add_reaction(Reaction(2 * h + o, h2o, 1.0))
+        system.add_reaction(Reaction(h2o, None, 0.5))
+        matrices = system.get_reaction_matrices()
+        # Reactions come from a set, so row order is not deterministic
+        reagents = matrices.reagents_m.tolist()
+        products = matrices.products_m.tolist()
+        decay_index = reagents.index([0.0, 0.0, 1.0])
+        assert products[decay_index] == [0.0, 0.0, 0.0]
+        assert matrices.rates_v[decay_index] == 0.5
+        forward_index = reagents.index([2.0, 1.0, 0.0])
+        assert products[forward_index] == [0.0, 0.0, 1.0]
+
+    def test_decay_of_an_unknown_species_raises(self):
+        h = Species("H")
+        system = ReactionSystem([h])
+        system.add_reaction(Reaction(Species("O"), None, 1.0))
+        with pytest.raises(ValueError):
+            system.get_reaction_matrices()

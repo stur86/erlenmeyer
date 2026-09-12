@@ -19,7 +19,7 @@ def _():
 def _(Reaction, ReactionSystem, Species):
     # Brusselator, a classic chemical model with a limit cycle.
     #   A -> X        B + X -> Y + D
-    #   2X + Y -> 3X  X -> E
+    #   2X + Y -> 3X  X -> *
     # A and B are reservoirs: they are so abundant that their slow draw-down
     # barely shifts the dynamics on the simulated timescale, so X and Y
     # oscillate in a sustained, self-excited cycle instead of settling down.
@@ -28,15 +28,17 @@ def _(Reaction, ReactionSystem, Species):
     x = Species("X")
     y = Species("Y")
     d = Species("D")
-    e = Species("E")
 
-    br = ReactionSystem([a, b, x, y, d, e])
+    br = ReactionSystem([a, b, x, y, d])
     # With [A]=1000 and [B]=10000 the effective rates are ~0.001*1000=1 and
     # ~0.0003*10000=3, putting the system above the Hopf threshold b > 1+a^2.
     br.add_reaction(Reaction(a, x, 0.001))
     br.add_reaction(Reaction(b + x, y + d, 0.0003))
     br.add_reaction(Reaction(2 * x + y, 3 * x, 1.0))
-    br.add_reaction(Reaction(x, e, 1.0))
+    # The final step only removes X, so it is written as a decay and the inert
+    # product E of the textbook scheme drops out. D stays: the step that makes
+    # it also makes Y, so that one is not a decay.
+    br.add_reaction(Reaction(x, None, 1.0))
     return (br,)
 
 

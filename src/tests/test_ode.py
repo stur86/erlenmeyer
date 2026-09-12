@@ -129,3 +129,57 @@ class TestOdeSimulatorForwardsKwargs:
         sim = ODESimulator(_decay_system())
         with pytest.raises(ValueError):
             sim.run({"A": 1.0}, method="NOT_A_REAL_METHOD")
+
+
+class TestOdeSimulatorDecay:
+    def _decay_to_nothing(self, k=1.0):
+        """First-order decay A -> * , with the products left out entirely."""
+        a = Species("A")
+        system = ReactionSystem([a])
+        system.add_reaction(Reaction(a, None, k))
+        return system
+
+    def test_decay_follows_the_analytic_solution(self):
+        k, t_end = 2.0, 3.0
+        result = ODESimulator(self._decay_to_nothing(k)).run(
+            {"A": 5.0}, t_end=t_end, rtol=1e-10, atol=1e-12
+        )
+        assert np.isclose(result.values[-1, 0], 5.0 * np.exp(-k * t_end))
+
+    def test_decay_removes_matter_from_the_system(self):
+        result = ODESimulator(self._decay_to_nothing(k=1.0)).run({"A": 5.0}, t_end=5.0)
+        totals = result.values.sum(axis=1)
+        assert totals[-1] < totals[0]
+        assert np.all(np.diff(totals) <= 0)
+
+    def test_matches_a_decay_into_an_explicit_waste_species(self):
+        # A -> * must consume A exactly like A -> B does; the only difference
+        # is that nothing is left behind to account for
+        k, t_end = 1.5, 2.0
+        to_nothing = ODESimulator(self._decay_to_nothing(k)).run(
+            {"A": 4.0}, t_end=t_end, rtol=1e-10, atol=1e-12
+        )
+        to_waste = ODESimulator(_decay_system(k)).run(
+            {"A": 4.0}, t_end=t_end, rtol=1e-10, atol=1e-12
+        )
+        assert np.allclose(to_nothing.values[:, 0], to_waste.values[:, 0])
+
+    def test_decay_of_two_reagents_at_once(self):
+        # A + B -> * consumes the two species at the same rate
+        a, b = Species("A"), Species("B")
+        system = ReactionSystem([a, b])
+        system.add_reaction(Reaction(a + b, None, 1.0))
+        result = ODESimulator(system).run({"A": 3.0, "B": 3.0}, t_end=2.0)
+        assert np.allclose(result.values[:, 0], result.values[:, 1])
+        assert result.values[-1, 0] < 3.0
+
+    def test_decay_alongside_production(self):
+        # A -> B -> * : B rises, then is drained away
+        a, b = Species("A"), Species("B")
+        system = ReactionSystem([a, b])
+        system.add_reaction(Reaction(a, b, 2.0))
+        system.add_reaction(Reaction(b, None, 1.0))
+        result = ODESimulator(system).run({"A": 1.0}, t_end=20.0, steps=500)
+        assert result.values[:, 1].max() > 0.0
+        assert np.isclose(result.values[-1, 0], 0.0, atol=1e-6)
+        assert np.isclose(result.values[-1, 1], 0.0, atol=1e-6)

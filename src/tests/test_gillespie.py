@@ -143,3 +143,41 @@ class TestGillespieSimulatorMaxSteps:
         assert len(r2) < len(r1)
         assert len(r2) == 10
         assert np.all(r2.values == r1.values[:10])
+
+
+class TestGillespieSimulatorDecay:
+    def _decay_to_nothing(self, k=1.0):
+        """First-order decay A -> * , with the products left out entirely."""
+        a = Species("A")
+        system = ReactionSystem([a])
+        system.add_reaction(Reaction(a, None, k))
+        return system
+
+    def test_population_only_ever_falls(self):
+        result = GillespieSimulator(self._decay_to_nothing()).run(
+            {"A": 50}, t_end=1.0, seed=3
+        )
+        assert np.all(np.diff(result.values[:, 0]) <= 0)
+
+    def test_decay_empties_the_system(self):
+        result = GillespieSimulator(self._decay_to_nothing(k=2.0)).run(
+            {"A": 50}, t_end=30.0, seed=3
+        )
+        assert result.values[-1, 0] == 0
+
+    def test_empty_system_stops_at_t_end(self):
+        # Once the last molecule is gone no reaction is possible any more
+        result = GillespieSimulator(self._decay_to_nothing(k=5.0)).run(
+            {"A": 5}, t_end=20.0, seed=3
+        )
+        assert result.values[-1, 0] == 0
+        assert result.times[-1] == 20.0
+
+    def test_each_step_removes_exactly_one_molecule(self):
+        result = GillespieSimulator(self._decay_to_nothing()).run(
+            {"A": 20}, t_end=30.0, seed=3
+        )
+        steps = np.diff(result.values[:, 0])
+        # The final entry repeats the last state when the system stops
+        assert set(steps.tolist()) <= {-1, 0}
+        assert (steps == -1).sum() == 20

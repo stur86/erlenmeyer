@@ -66,18 +66,36 @@ comparison independent of the order you wrote them in.
 | Field | Meaning |
 | --- | --- |
 | `reagents` | the term consumed |
-| `products` | the term produced |
+| `products` | the term produced, or `None` for a decay |
 | `rate` | the rate constant |
 | `bidirectional` | if `True`, the reverse reaction is added too |
 
 ```python
 Reaction(2 * h + o, h2o, 1.0)                      # 2H + O => H2O [1.0]
 Reaction(s + e, es, 1.0, bidirectional=True)       # S + E <=> ES [1.0]
+Reaction(y, None, 0.8)                             # Y => * [0.8]
 ```
 
 **Note:** a bidirectional reaction uses the same rate constant in both
 directions. If the forward and the reverse rates differ, add two separate
 reactions instead.
+
+#### Decay
+
+Products of `None` make the reaction a decay: the reagents are consumed and
+nothing takes their place. It prints with `*` in place of the products.
+
+Use it wherever matter leaves the model for good — a molecule that degrades, a
+predator that dies, an inert waste product. Without it you would have to
+declare a species that only ever grows, which adds a column to every result
+and, in a Gillespie run, a population that climbs without bound.
+
+```python
+lv.add_reaction(Reaction(y, None, 0.8))            # the predator dies
+```
+
+A decay can not be bidirectional; there is nothing for it to react back from,
+so `Reaction(y, None, 0.8, bidirectional=True)` raises `ValueError`.
 
 ### ReactionSystem
 
@@ -103,10 +121,12 @@ which is the form the numerical kernels use:
 
 * `reagents_m`, shape `[reactions, species]` — how much of each species each
   reaction consumes,
-* `products_m`, same shape — how much it produces,
+* `products_m`, same shape — how much it produces; the row of a decay is all
+  zeros,
 * `rates_v`, shape `[reactions]` — the rate constants.
 
-A bidirectional reaction becomes two rows, forward and reverse.
+A bidirectional reaction becomes two rows, forward and reverse. A decay
+becomes one row like any other reaction.
 
 ### Simulators
 
@@ -147,13 +167,17 @@ direct method.
 | Argument | Default | Meaning |
 | --- | --- | --- |
 | `t_end` | `1.0` | simulated time limit |
+| `max_steps` | `None` | stop after this many steps, even before `t_end` |
 | `seed` | `None` | seed for the global NumPy RNG, for reproducible runs |
 
 Here the values are molecule counts, not concentrations, so every amount in
 `initial` must be a whole number; a fractional one raises `ValueError`. The
-time points are the
-times of the individual reaction events, so they are not evenly spaced and
-their number changes from run to run.
+time points are the times of the individual reaction events, so they are not
+evenly spaced and their number changes from run to run.
+
+`max_steps` is a safety net. A system with autocatalytic growth can fire ever
+faster as its population rises, so `t_end` alone does not bound the work; the
+cap stops such a run before it eats all the memory.
 
 ### SimulationTrajectory
 
@@ -164,6 +188,13 @@ Both simulators return the same frozen dataclass:
 | `species` | `[species]` | species names, in system order |
 | `times` | `[times]` | the sampled time points |
 | `values` | `[times, species]` | concentrations or counts |
+| `simulation_type` | | `SimulationType.ODE` or `SimulationType.GILLESPIE` |
+
+`simulation_type` records which solver produced the trajectory, which tells
+the tools downstream how to read `values`: an ODE trajectory holds continuous
+concentrations and is interpolated linearly, a Gillespie one holds integer
+counts and is stepwise constant. A Gillespie trajectory whose values are not
+integers is rejected on construction.
 
 `len(traj)` is the number of time points, and `traj.slice(slice(0, None, 10))`
 returns a new trajectory with every tenth point. This is useful to thin out a
@@ -171,9 +202,31 @@ Gillespie run, which can have many thousands of events.
 
 ### Sampling
 
-`sample_trajectory(traj, sample_size, with_replacement=True, rng=None)` emulates
-the measurement of a small aliquot of the system at each time point. It returns
-an integer array of counts with shape `[times, species]`.
+`sample_trajectory` emulates the measurement of a small aliquot of the system
+at each time point. It returns an integer array of counts with shape
+`[times, species]`.
+
+```python
+sample_trajectory(
+    traj,
+    sample_size=None,        # how many particles to draw, or
+    volume_fraction=None,    # what fraction of them to draw
+    with_replacement=True,
+    rng=None,                # a Generator, a seed, or None
+    times=None,              # sample here instead of the trajectory's times
+    volume=1.0,              # volume the values are a density of
+)
+```
+
+How many particles are drawn at a time point comes from exactly one of two
+arguments; giving both, or neither, raises `ValueError`.
+
+* `sample_size` draws the same fixed number at every time point.
+* `volume_fraction` draws that fraction of the particles present, the count
+  itself being binomial. The values are read as particles per unit volume, so
+  `volume` sets how many particles a time point actually holds.
+
+How they are drawn depends on `with_replacement`:
 
 * **With replacement** (the default) each time point is treated as a set of
   proportions and sampled from a multinomial distribution. The values are
@@ -181,16 +234,19 @@ an integer array of counts with shape `[times, species]`.
   every species gives an all-zero sample.
 * **Without replacement** each time point is treated as a population of
   distinguishable items and sampled from a multivariate hypergeometric
-  distribution. The values must be integers, and `sample_size` can not exceed
-  the total population at any time point.
+  distribution. The values must be integers, and the number drawn can not
+  exceed the population at any time point.
 
-`rng` accepts a `numpy.random.Generator`, an integer seed, or `None`.
+Pass `times` to sample on your own time axis instead of the trajectory's. The
+points must lie inside the trajectory's range; a Gillespie trajectory is
+interpolated with the previous value, since it is stepwise constant, and an
+ODE one linearly.
 
 ```python
 from erlenmeyer import sample_trajectory
 
 thinned = traj.slice(slice(0, None, 10))
-counts = sample_trajectory(thinned, 500, rng=42)
+counts = sample_trajectory(thinned, sample_size=500, rng=42)
 ```
 
 ## How it works
@@ -286,7 +342,7 @@ uv run --group examples marimo edit examples/example_basic.py
 | `example_basic.py` | 2H + O → H₂O, the shortest possible use of the API |
 | `example_circular.py` | a closed isomer cycle A → B → C → A, with mass conservation |
 | `example_michaelis_menten.py` | enzyme kinetics, S + E ⇌ ES → E + P |
-| `example_lotka_volterra.py` | predator-prey oscillations |
+| `example_lotka_volterra.py` | predator-prey oscillations, with death as a decay |
 | `example_brusselator.py` | a limit cycle from an autocatalytic model |
 | `example_sir.py` | epidemic spread, with the ODE and Gillespie results compared |
 | `example_sampling.py` | finite-aliquot sampling of a trajectory |

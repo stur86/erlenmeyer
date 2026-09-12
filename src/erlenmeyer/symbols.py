@@ -47,11 +47,17 @@ class AbstractReactionTerm(ABC):
         )
 
     def __eq__(self, other: object) -> bool:
+        """Compare two terms by stochiometry, ignoring their classes.
+
+        Anything that is not a term gives ``NotImplemented``, so Python falls
+        back to comparing identity and the term simply comes out unequal. This
+        has to stay lenient: the products of a decay are ``None``, and a
+        decay would otherwise be impossible to compare with a reaction that
+        has products.
+        """
         if isinstance(other, AbstractReactionTerm):
             return self.stochiometry() == other.stochiometry()
-        raise TypeError(
-            f"Unsupported equality between {type(self).__name__} and {type(other)}"
-        )
+        return NotImplemented
 
     def __hash__(self) -> int:
         return hash(tuple(self.stochiometry()))

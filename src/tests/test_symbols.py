@@ -106,9 +106,10 @@ class TestSingleReactionTermEquality:
         assert SingleReactionTerm("H", 2) != ReactionTerm([("H", 2), ("O", 1)])
 
     @pytest.mark.parametrize("other", [1, "H", None, ("H", 1), [("H", 1)]])
-    def test_comparison_with_unrelated_types_raises(self, other):
-        with pytest.raises(TypeError):
-            assert SingleReactionTerm("H") == other  # type: ignore[comparison-overlap]
+    def test_comparison_with_unrelated_types_is_unequal(self, other):
+        # Unrelated types are not an error, they are simply not equal
+        assert SingleReactionTerm("H") != other  # type: ignore[comparison-overlap]
+        assert not SingleReactionTerm("H") == other  # noqa: SIM201
 
 
 class TestSingleReactionTermHashing:
@@ -306,9 +307,10 @@ class TestReactionTermEquality:
         assert ReactionTerm([]) == ReactionTerm([])
 
     @pytest.mark.parametrize("other", [1, "H", None, ("H", 1), [("H", 1)]])
-    def test_comparison_with_unrelated_types_raises(self, other):
-        with pytest.raises(TypeError):
-            assert ReactionTerm([("H", 2)]) == other  # type: ignore[comparison-overlap]
+    def test_comparison_with_unrelated_types_is_unequal(self, other):
+        # Unrelated types are not an error, they are simply not equal
+        assert ReactionTerm([("H", 2)]) != other  # type: ignore[comparison-overlap]
+        assert not ReactionTerm([("H", 2)]) == other  # noqa: SIM201
 
 
 class TestReactionTermHashing:
@@ -418,3 +420,20 @@ class TestBuildingFormulas:
 
     def test_underscored_names_can_be_combined(self):
         assert repr(2 * Species("H_aq") + Species("O_g")) == "2H_aq + O_g"
+
+
+class TestReactionTermReflectedEquality:
+    @pytest.mark.parametrize("other", [1, "H", None, ("H", 1)])
+    def test_unrelated_type_on_the_left_is_unequal(self, other):
+        assert other != SingleReactionTerm("H")  # type: ignore[comparison-overlap]
+        assert other != ReactionTerm([("H", 1)])  # type: ignore[comparison-overlap]
+
+    def test_a_term_is_not_equal_to_none(self):
+        # None is the products of a decay, so this comparison has to work
+        decay_products = None
+        assert SingleReactionTerm("H") != decay_products
+        assert decay_products != SingleReactionTerm("H")
+
+    def test_terms_still_compare_by_stochiometry(self):
+        assert SingleReactionTerm("H", 2) == ReactionTerm([("H", 2)])
+        assert SingleReactionTerm("H", 2) != ReactionTerm([("O", 2)])

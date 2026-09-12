@@ -19,15 +19,17 @@ def _():
 def _(Reaction, ReactionSystem, Species):
     # Lotka-Volterra predator-prey system. X is the prey, Y the predator.
     # X reproduces autocatalytically, Y grows by consuming X, and the
-    # predator dies into waste P. This sustains oscillations.
+    # predator dies. This sustains oscillations.
     x = Species("X")
     y = Species("Y")
-    p = Species("P")
 
-    lv = ReactionSystem([x, y, p])
+    lv = ReactionSystem([x, y])
     lv.add_reaction(Reaction(x, 2 * x, 1.0))
     lv.add_reaction(Reaction(x + y, 2 * y, 0.02))
-    lv.add_reaction(Reaction(y, p, 0.8))
+    # Death is a decay: products of None mean the predator leaves the system
+    # and nothing takes its place. Without that we would have to carry an
+    # inert waste species that only ever grows.
+    lv.add_reaction(Reaction(y, None, 0.8))
     return (lv,)
 
 
@@ -40,11 +42,11 @@ def _(ODESimulator, lv):
 @app.cell
 def _(plt, traj):
     _f, _a = plt.subplots()
-    _a.plot(traj.times, traj.values[:, :2])
+    _a.plot(traj.times, traj.values)
     _a.set_xlabel("time")
     _a.set_ylabel("population")
     _a.set_title("Lotka-Volterra: predator-prey oscillations")
-    _a.legend(["X", "Y"])
+    _a.legend(traj.species)
     return
 
 
